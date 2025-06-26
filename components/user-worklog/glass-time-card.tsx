@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Play, Pause, Square, MapPin, X, AlertTriangle, Navigation } from "lucide-react"
+import { Play, Pause, Square, X, AlertTriangle, Navigation, Building } from "lucide-react"
 import { workTimeConfig } from "@/lib/work-config"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -27,7 +27,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   const [showLocationModal, setShowLocationModal] = useState(false)
   const [showGeofenceModal, setShowGeofenceModal] = useState(false)
 
-  // Use the location hook with work station coordinates
+  // Use the location hook
   const {
     location,
     permissionStatus,
@@ -37,18 +37,14 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     getCurrentLocation,
     clearError,
     isPermissionBlocked,
-    isWithinWorkStation,
+    isWithinOffice,
     getBrowserInstructions,
   } = useLocation({
     enableHighAccuracy: true,
-    timeout: 10000,
-    maximumAge: 60000,
+    timeout: 15000,
+    maximumAge: 30000,
     fetchAddress: true,
-    workStationCoords: {
-      latitude: 6.849659,
-      longitude: 79.920077,
-    },
-    geofenceRadius: 15, // 15 meters
+    autoRefreshOnClockIn: true,
   })
 
   useEffect(() => {
@@ -77,10 +73,12 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     clearError()
 
     try {
-      // First, get the user's location using the hook
-      const locationData = await getCurrentLocation()
+      console.log("Starting clock in process...")
 
-      console.log("Location obtained:", locationData)
+      // Always get fresh location when clocking in
+      const locationData = await getCurrentLocation(true) // Force refresh
+
+      console.log("Fresh location obtained:", locationData)
       console.log("Geofence result:", geofenceResult)
 
       // Now proceed with clock in API call
@@ -90,7 +88,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         return
       }
 
-      console.log("Attempting to clock in...")
+      console.log("Attempting to clock in with fresh location...")
 
       const response = await fetch("/api/shift/clock-in", {
         method: "POST",
@@ -127,7 +125,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       // Check if it's a location permission error
       if (locationError?.type === "permission" || isPermissionBlocked) {
         setShowLocationModal(true)
-      } else if (locationError?.type === "geofence" || errorMessage.includes("work station")) {
+      } else if (locationError?.type === "geofence" || errorMessage.includes("office")) {
         setShowGeofenceModal(true)
       } else {
         setClockInError(`Error: ${errorMessage}`)
@@ -227,16 +225,18 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
                 Location Blocked
               </Badge>
             )}
-            {location && geofenceResult && !geofenceResult.isWithinGeofence && (
-              <Badge variant="destructive" className="gap-2">
-                <Navigation className="h-3 w-3" />
-                {geofenceResult.distance}m away
+
+            {isWithinOffice && geofenceResult && (
+              <Badge variant="secondary" className="bg-green-100 text-green-800 gap-2">
+                <Building className="h-3 w-3" />
+                At {geofenceResult.office.name}
               </Badge>
             )}
-            {location && isWithinWorkStation && (
-              <Badge variant="secondary" className="bg-green-100 text-green-800 gap-2">
-                <MapPin className="h-3 w-3" />
-                At Work Station
+
+            {location && !isWithinOffice && geofenceResult && (
+              <Badge variant="destructive" className="gap-2">
+                <Navigation className="h-3 w-3" />
+                {geofenceResult.distance}m from office
               </Badge>
             )}
           </div>
@@ -382,7 +382,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Navigation className="h-5 w-5 text-orange-500" />
-                  <CardTitle className="text-lg">Get Near to the Work Station</CardTitle>
+                  <CardTitle className="text-lg">Get Closer to Office</CardTitle>
                 </div>
                 <Button variant="ghost" size="sm" onClick={handleCloseGeofenceModal} className="h-6 w-6 p-0">
                   <X className="h-4 w-4" />
@@ -393,7 +393,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
               <Alert className="border-orange-200 bg-orange-50">
                 <Navigation className="h-4 w-4 text-orange-600" />
                 <AlertDescription className="text-orange-800">
-                  {locationError?.message || "You need to be within 15 meters of the work station to clock in."}
+                  {locationError?.message || "You need to be within the office area to clock in."}
                 </AlertDescription>
               </Alert>
 
@@ -408,22 +408,28 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-blue-700">Required Distance:</span>
-                        <span className="font-medium text-blue-900">≤ {geofenceResult.requiredRadius}m</span>
+                        <span className="font-medium text-blue-900">≤ {geofenceResult.office.radius}m</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-blue-700">Move Closer By:</span>
                         <span className="font-medium text-red-600">
-                          {Math.max(0, geofenceResult.distance - geofenceResult.requiredRadius).toFixed(1)}m
+                          {Math.max(0, geofenceResult.distance - geofenceResult.office.radius).toFixed(1)}m
                         </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <h3 className="font-semibold text-green-900 mb-2">Work Station Location:</h3>
-                    <div className="text-sm text-green-700">
-                      <div>Latitude: {geofenceResult.workStationCoords.latitude}</div>
-                      <div>Longitude: {geofenceResult.workStationCoords.longitude}</div>
+                    <h3 className="font-semibold text-green-900 mb-2">Office Location:</h3>
+                    <div className="text-sm text-green-700 space-y-1">
+                      <div>
+                        <strong>{geofenceResult.office.name}</strong>
+                      </div>
+                      {geofenceResult.office.address && <div>{geofenceResult.office.address}</div>}
+                      <div>
+                        Coordinates: {geofenceResult.office.latitude.toFixed(6)},{" "}
+                        {geofenceResult.office.longitude.toFixed(6)}
+                      </div>
                     </div>
                   </div>
                 </div>
