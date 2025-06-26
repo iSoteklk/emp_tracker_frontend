@@ -1,82 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { MapPin, RefreshCw, Info } from "lucide-react"
-
-interface LocationData {
-  latitude: number
-  longitude: number
-  accuracy: number
-  timestamp: number
-  address?: string
-}
+import { useLocation } from "@/hooks/use-location"
 
 interface LocationDisplayProps {
   showRefresh?: boolean
-  onLocationUpdate?: (location: LocationData) => void
 }
 
-export function LocationDisplay({ showRefresh = false, onLocationUpdate }: LocationDisplayProps) {
-  const [location, setLocation] = useState<LocationData | null>(null)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [error, setError] = useState("")
-
-  useEffect(() => {
-    const savedLocation = localStorage.getItem("userLocation")
-
-    if (savedLocation) {
-      try {
-        setLocation(JSON.parse(savedLocation))
-      } catch (error) {
-        console.error("Error parsing saved location:", error)
-      }
-    }
-  }, [])
-
-  const refreshLocation = async () => {
-    setIsRefreshing(true)
-    setError("")
-
-    try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000,
-        })
-      })
-
-      const locationData: LocationData = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        timestamp: Date.now(),
-      }
-
-      // Try to get address
-      try {
-        const response = await fetch(
-          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${locationData.latitude}&longitude=${locationData.longitude}&localityLanguage=en`,
-        )
-        const addressData = await response.json()
-        locationData.address = `${addressData.city}, ${addressData.principalSubdivision}, ${addressData.countryName}`
-      } catch (addressError) {
-        console.log("Could not fetch address:", addressError)
-      }
-
-      setLocation(locationData)
-      localStorage.setItem("userLocation", JSON.stringify(locationData))
-
-      onLocationUpdate?.(locationData)
-    } catch (error) {
-      setError("Failed to get current location")
-    } finally {
-      setIsRefreshing(false)
-    }
-  }
+export function LocationDisplay({ showRefresh = false }: LocationDisplayProps) {
+  const { location, isLoading, refreshLocation } = useLocation({
+    fetchAddress: true,
+  })
 
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp).toLocaleString()
@@ -123,10 +60,10 @@ export function LocationDisplay({ showRefresh = false, onLocationUpdate }: Locat
               variant="outline"
               size="sm"
               onClick={refreshLocation}
-              disabled={isRefreshing}
+              disabled={isLoading}
               className="flex items-center gap-2"
             >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
           )}

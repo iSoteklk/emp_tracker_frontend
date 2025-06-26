@@ -1,18 +1,12 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Play, Pause, Square, MapPin, X } from "lucide-react"
+import { Play, Pause, Square, MapPin, X, AlertTriangle, Navigation } from "lucide-react"
 import { workTimeConfig } from "@/lib/work-config"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-
-interface LocationData {
-  latitude: number
-  longitude: number
-  accuracy: number
-  timestamp: number
-  address?: string
-}
+import { Badge } from "@/components/ui/badge"
+import { useLocation } from "@/hooks/use-location"
 
 interface GlassTimeCardProps {
   showSeconds?: boolean
@@ -28,11 +22,34 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [elapsedTime, setElapsedTime] = useState(0) // in seconds
   const [timezoneName, setTimezoneName] = useState<string>("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [isClockingIn, setIsClockingIn] = useState(false)
+  const [clockInError, setClockInError] = useState("")
   const [showLocationModal, setShowLocationModal] = useState(false)
-  const [locationError, setLocationError] = useState("")
-  const [isGettingLocation, setIsGettingLocation] = useState(false)
+  const [showGeofenceModal, setShowGeofenceModal] = useState(false)
+
+  // Use the location hook with work station coordinates
+  const {
+    location,
+    permissionStatus,
+    isLoading: isGettingLocation,
+    error: locationError,
+    geofenceResult,
+    getCurrentLocation,
+    clearError,
+    isPermissionBlocked,
+    isWithinWorkStation,
+    getBrowserInstructions,
+  } = useLocation({
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 60000,
+    fetchAddress: true,
+    workStationCoords: {
+      latitude: 6.849659,
+      longitude: 79.920077,
+    },
+    geofenceRadius: 15, // 15 meters
+  })
 
   useEffect(() => {
     const timezoneOffset = currentTime.getTimezoneOffset()
@@ -54,84 +71,22 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     return () => clearInterval(intervalId)
   }, [isTracking, startTime])
 
-  const getCurrentLocation = (): Promise<LocationData> => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("Geolocation is not supported by this browser"))
-        return
-      }
-
-      const options = {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000,
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const locationData: LocationData = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            timestamp: Date.now(),
-          }
-
-          // Try to get address from coordinates (optional)
-          try {
-            const response = await fetch(
-              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${locationData.latitude}&longitude=${locationData.longitude}&localityLanguage=en`,
-            )
-            const addressData = await response.json()
-            locationData.address = `${addressData.city}, ${addressData.principalSubdivision}, ${addressData.countryName}`
-          } catch (addressError) {
-            console.log("Could not fetch address:", addressError)
-            // Address is optional, so we continue without it
-          }
-
-          resolve(locationData)
-        },
-        (error) => {
-          let errorMessage = "Unable to retrieve your location"
-
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMessage = "You have to allow the geolocation request to start the shift"
-              break
-            case error.POSITION_UNAVAILABLE:
-              errorMessage = "Location information is unavailable"
-              break
-            case error.TIMEOUT:
-              errorMessage = "Location request timed out. Please try again"
-              break
-          }
-
-          reject(new Error(errorMessage))
-        },
-        options,
-      )
-    })
-  }
-
   const handleClockIn = async () => {
-    setIsLoading(true)
-    setError("")
-    setLocationError("")
+    setIsClockingIn(true)
+    setClockInError("")
+    clearError()
 
     try {
-      // First, get the user's location
-      setIsGettingLocation(true)
+      // First, get the user's location using the hook
       const locationData = await getCurrentLocation()
 
-      // Store location data
-      localStorage.setItem("userLocation", JSON.stringify(locationData))
-
       console.log("Location obtained:", locationData)
+      console.log("Geofence result:", geofenceResult)
 
-      // Now proceed with clock in API call using our internal route
+      // Now proceed with clock in API call
       const token = localStorage.getItem("token")
       if (!token) {
-        setError("Please login first")
-        setIsLoading(false)
+        setClockInError("Please login first")
         return
       }
 
@@ -145,6 +100,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         },
         body: JSON.stringify({
           location: locationData,
+          geofence: geofenceResult,
         }),
       })
 
@@ -158,26 +114,26 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         setStartTime(now)
         setIsTracking(true)
         setElapsedTime(0)
-        setError("")
+        setClockInError("")
         console.log("Clock in successful:", data)
       } else {
         console.error("Clock in failed:", data)
-        setError(data.message || data.error || `Server error: ${response.status}`)
+        setClockInError(data.message || data.error || `Server error: ${response.status}`)
       }
     } catch (error) {
       console.error("Location or clock-in error:", error)
       const errorMessage = error instanceof Error ? error.message : "Unknown error"
 
       // Check if it's a location permission error
-      if (errorMessage.includes("geolocation request")) {
-        setLocationError(errorMessage)
+      if (locationError?.type === "permission" || isPermissionBlocked) {
         setShowLocationModal(true)
+      } else if (locationError?.type === "geofence" || errorMessage.includes("work station")) {
+        setShowGeofenceModal(true)
       } else {
-        setError(`Error: ${errorMessage}`)
+        setClockInError(`Error: ${errorMessage}`)
       }
     } finally {
-      setIsLoading(false)
-      setIsGettingLocation(false)
+      setIsClockingIn(false)
     }
   }
 
@@ -193,7 +149,12 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
 
   const handleCloseLocationModal = () => {
     setShowLocationModal(false)
-    setLocationError("")
+    clearError()
+  }
+
+  const handleCloseGeofenceModal = () => {
+    setShowGeofenceModal(false)
+    clearError()
   }
 
   const formatElapsedTime = (seconds: number): string => {
@@ -240,6 +201,8 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   const workedHours = elapsedTime / 3600
   const isOvertime = workTimeConfig.isOvertime(workedHours)
 
+  const isLoading = isClockingIn || isGettingLocation
+
   return (
     <>
       <div className="w-96 text-white bg-white/20 shadow-xl backdrop-blur-xl p-6 rounded-lg border border-white/10">
@@ -254,6 +217,28 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
           {/* Work Schedule Info */}
           <div className="text-center text-xs opacity-70">
             <div>Work Hours: {workTimeConfig.getWorkingHoursText()}</div>
+          </div>
+
+          {/* Location Status Indicators */}
+          <div className="flex flex-wrap justify-center gap-2">
+            {isPermissionBlocked && (
+              <Badge variant="destructive" className="gap-2">
+                <AlertTriangle className="h-3 w-3" />
+                Location Blocked
+              </Badge>
+            )}
+            {location && geofenceResult && !geofenceResult.isWithinGeofence && (
+              <Badge variant="destructive" className="gap-2">
+                <Navigation className="h-3 w-3" />
+                {geofenceResult.distance}m away
+              </Badge>
+            )}
+            {location && isWithinWorkStation && (
+              <Badge variant="secondary" className="bg-green-100 text-green-800 gap-2">
+                <MapPin className="h-3 w-3" />
+                At Work Station
+              </Badge>
+            )}
           </div>
 
           {/* Divider */}
@@ -287,10 +272,10 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
             </div>
 
             {/* Error Message */}
-            {error && (
+            {clockInError && (
               <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-200 text-sm max-w-full break-words">
                 <div className="font-semibold mb-1">Error:</div>
-                <div className="text-xs">{error}</div>
+                <div className="text-xs">{clockInError}</div>
               </div>
             )}
 
@@ -338,41 +323,41 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       {/* Location Permission Modal */}
       {showLocationModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-red-500" />
-                  <CardTitle className="text-lg">Location Required</CardTitle>
+                  <AlertTriangle className="h-5 w-5 text-red-500" />
+                  <CardTitle className="text-lg">Location Access Blocked</CardTitle>
                 </div>
                 <Button variant="ghost" size="sm" onClick={handleCloseLocationModal} className="h-6 w-6 p-0">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <Alert variant="destructive">
-                <MapPin className="h-4 w-4" />
-                <AlertDescription className="font-medium">{locationError}</AlertDescription>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="font-medium">
+                  {locationError?.message || "Location access has been permanently blocked for this site."}
+                </AlertDescription>
               </Alert>
 
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  To start your shift, you need to allow location access. This helps us:
-                </p>
-                <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                  <li>• Verify your work location</li>
-                  <li>• Track attendance accurately</li>
-                  <li>• Ensure security compliance</li>
-                </ul>
-              </div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{getBrowserInstructions().icon}</span>
+                  <h3 className="font-semibold">How to Fix This in {getBrowserInstructions().browser}:</h3>
+                </div>
 
-              <div className="space-y-2">
-                <p className="text-sm font-medium">To enable location access:</p>
-                <ol className="text-sm text-muted-foreground space-y-1 ml-4">
-                  <li>1. Click the location icon in your browser's address bar</li>
-                  <li>2. Select "Allow" for location permissions</li>
-                  <li>3. Try clicking "Clock In" again</li>
+                <ol className="space-y-2">
+                  {getBrowserInstructions().steps.map((step, index) => (
+                    <li key={index} className="flex gap-3 text-sm">
+                      <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-medium">
+                        {index + 1}
+                      </span>
+                      <span className="text-muted-foreground">{step}</span>
+                    </li>
+                  ))}
                 </ol>
               </div>
 
@@ -381,6 +366,75 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
                   I'll Enable Location
                 </Button>
                 <Button variant="outline" onClick={handleCloseLocationModal} className="flex-1">
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Geofence Modal */}
+      {showGeofenceModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Navigation className="h-5 w-5 text-orange-500" />
+                  <CardTitle className="text-lg">Get Near to the Work Station</CardTitle>
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleCloseGeofenceModal} className="h-6 w-6 p-0">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="border-orange-200 bg-orange-50">
+                <Navigation className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="text-orange-800">
+                  {locationError?.message || "You need to be within 15 meters of the work station to clock in."}
+                </AlertDescription>
+              </Alert>
+
+              {geofenceResult && (
+                <div className="space-y-3">
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <h3 className="font-semibold text-blue-900 mb-2">Distance Information:</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Current Distance:</span>
+                        <span className="font-medium text-blue-900">{geofenceResult.distance}m</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Required Distance:</span>
+                        <span className="font-medium text-blue-900">≤ {geofenceResult.requiredRadius}m</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Move Closer By:</span>
+                        <span className="font-medium text-red-600">
+                          {Math.max(0, geofenceResult.distance - geofenceResult.requiredRadius).toFixed(1)}m
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                    <h3 className="font-semibold text-green-900 mb-2">Work Station Location:</h3>
+                    <div className="text-sm text-green-700">
+                      <div>Latitude: {geofenceResult.workStationCoords.latitude}</div>
+                      <div>Longitude: {geofenceResult.workStationCoords.longitude}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button onClick={handleClockIn} disabled={isLoading} className="flex-1 gap-2">
+                  <Navigation className="h-4 w-4" />
+                  {isLoading ? "Checking..." : "Try Again"}
+                </Button>
+                <Button variant="outline" onClick={handleCloseGeofenceModal} className="flex-1">
                   Cancel
                 </Button>
               </div>

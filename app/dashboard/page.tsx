@@ -1,9 +1,11 @@
 "use client"
 
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { GlassTimeCard } from "@/components/glass-time-card"
+import { GlassTimeCard } from "@/components/user-worklog/glass-time-card"
 import { WorkLogTable } from "@/components/work-log-table"
-import { LocationDisplay } from "@/components/location-display"
+import { LocationDisplay } from "@/components/user-worklog/location-display"
+import { LocationPermissionHelper } from "@/components//user-worklog/location-permission-helper"
+import { GeofenceStatus } from "@/components/geofence-status"
 import { Button } from "@/components/ui/button"
 import { AuthGuard } from "@/components/auth-guard"
 import { LogOut } from "lucide-react"
@@ -13,6 +15,9 @@ import { useEffect, useState } from "react"
 function UserDashboardContent() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [locationPermissionStatus, setLocationPermissionStatus] = useState<
+    "granted" | "denied" | "blocked" | "unknown"
+  >("unknown")
 
   useEffect(() => {
     const userData = localStorage.getItem("user")
@@ -77,6 +82,14 @@ function UserDashboardContent() {
                 </div>
               </div>
             </div>
+
+            {/* Geofence Status */}
+            <GeofenceStatus showRefresh={true} />
+
+            {/* Location Permission Helper - Show if location is blocked */}
+            {(locationPermissionStatus === "blocked" || locationPermissionStatus === "denied") && (
+              <LocationPermissionHelper onPermissionChange={setLocationPermissionStatus} />
+            )}
 
             {/* Location Display - Only show if location has been obtained */}
             <LocationDisplay showRefresh={true} />
