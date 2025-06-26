@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
     // Create the request body in the expected format
     const clockInData = {
-      date: new Date().toISOString().split("T")[0] + "T00:00:00.000Z", // Today's date at midnight
+      date: new Date().toISOString(), // Today's date at midnight
       clockInTime: new Date().toISOString(), // Current timestamp
       clockInLocation: {
         latitude: location.latitude,
