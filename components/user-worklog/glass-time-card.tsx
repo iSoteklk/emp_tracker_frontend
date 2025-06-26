@@ -26,6 +26,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   const [clockInError, setClockInError] = useState("")
   const [showLocationModal, setShowLocationModal] = useState(false)
   const [showGeofenceModal, setShowGeofenceModal] = useState(false)
+  const [clockInNotes, setClockInNotes] = useState("Starting my shift")
 
   // Use the location hook
   const {
@@ -46,6 +47,42 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     fetchAddress: true,
     autoRefreshOnClockIn: true,
   })
+
+  // Load saved timer state on mount
+  useEffect(() => {
+    const savedTimerState = localStorage.getItem("timerState")
+    if (savedTimerState) {
+      try {
+        const timerState = JSON.parse(savedTimerState)
+        if (timerState.isTracking && timerState.startTime) {
+          const savedStartTime = new Date(timerState.startTime)
+          const now = new Date()
+          const elapsed = Math.floor((now.getTime() - savedStartTime.getTime()) / 1000)
+
+          setIsTracking(true)
+          setStartTime(savedStartTime)
+          setElapsedTime(elapsed)
+        }
+      } catch (error) {
+        console.error("Error loading timer state:", error)
+        localStorage.removeItem("timerState")
+      }
+    }
+  }, [])
+
+  // Save timer state when it changes
+  useEffect(() => {
+    if (isTracking && startTime) {
+      const timerState = {
+        isTracking,
+        startTime: startTime.toISOString(),
+        elapsedTime,
+      }
+      localStorage.setItem("timerState", JSON.stringify(timerState))
+    } else {
+      localStorage.removeItem("timerState")
+    }
+  }, [isTracking, startTime, elapsedTime])
 
   useEffect(() => {
     const timezoneOffset = currentTime.getTimezoneOffset()
@@ -90,16 +127,21 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
 
       console.log("Attempting to clock in with fresh location...")
 
+      const requestBody = {
+        location: locationData,
+        geofence: geofenceResult,
+        notes: clockInNotes,
+      }
+
+      console.log("Sending request body:", requestBody)
+
       const response = await fetch("/api/shift/clock-in", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          location: locationData,
-          geofence: geofenceResult,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       console.log("Response status:", response.status)
@@ -107,13 +149,22 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       const data = await response.json()
       console.log("Response data:", data)
 
-      if (response.ok) {
-        const now = new Date()
-        setStartTime(now)
+      if (response.ok && data.success === "true") {
+        // Use the clock-in time from the server response or current time
+        const clockInTime = data.clockInTime ? new Date(data.clockInTime) : new Date()
+
+        setStartTime(clockInTime)
         setIsTracking(true)
         setElapsedTime(0)
         setClockInError("")
+
         console.log("Clock in successful:", data)
+        console.log("Timer started at:", clockInTime)
+
+        // Show success message briefly
+        setTimeout(() => {
+          // You could add a success toast here if needed
+        }, 1000)
       } else {
         console.error("Clock in failed:", data)
         setClockInError(data.message || data.error || `Server error: ${response.status}`)
@@ -137,12 +188,18 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
 
   const handlePause = () => {
     setIsTracking(false)
+    // Keep the start time so we can resume
+  }
+
+  const handleResume = () => {
+    setIsTracking(true)
   }
 
   const handleStop = () => {
     setIsTracking(false)
     setStartTime(null)
     setElapsedTime(0)
+    localStorage.removeItem("timerState")
   }
 
   const handleCloseLocationModal = () => {
@@ -269,6 +326,12 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
                   <span className="text-xs">Getting Location...</span>
                 </div>
               )}
+              {isTracking && (
+                <div className="flex items-center gap-1 text-green-300">
+                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                  <span className="text-xs">Active</span>
+                </div>
+              )}
             </div>
 
             {/* Error Message */}
@@ -282,16 +345,28 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
             {/* Control Buttons */}
             <div className="flex justify-center gap-3">
               {!isTracking ? (
-                <button
-                  onClick={handleClockIn}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-500/80 hover:bg-green-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Play className="w-4 h-4" />
-                  <span className="text-sm">
-                    {isLoading ? (isGettingLocation ? "Getting Location..." : "Clocking In...") : "Clock In"}
-                  </span>
-                </button>
+                <>
+                  {!startTime ? (
+                    <button
+                      onClick={handleClockIn}
+                      disabled={isLoading}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-500/80 hover:bg-green-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Play className="w-4 h-4" />
+                      <span className="text-sm">
+                        {isLoading ? (isGettingLocation ? "Getting Location..." : "Clocking In...") : "Clock In"}
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleResume}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-500/80 hover:bg-green-500 rounded-lg transition-colors"
+                    >
+                      <Play className="w-4 h-4" />
+                      <span className="text-sm">Resume</span>
+                    </button>
+                  )}
+                </>
               ) : (
                 <button
                   onClick={handlePause}
@@ -314,7 +389,15 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
 
             {/* Start Time Display */}
             {startTime && (
-              <div className="mt-3 text-xs opacity-70">Clocked in at: {workTimeConfig.formatTime(startTime)}</div>
+              <div className="mt-3 text-xs opacity-70">
+                Clocked in at: {workTimeConfig.formatTime(startTime)}
+                {isLate && <span className="text-red-300 ml-2">(Late)</span>}
+              </div>
+            )}
+
+            {/* Timer State Info */}
+            {startTime && !isTracking && (
+              <div className="mt-2 text-xs opacity-70 text-yellow-300">Timer paused - Click Resume to continue</div>
             )}
           </div>
         </div>
