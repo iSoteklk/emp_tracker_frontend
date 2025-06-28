@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -9,7 +10,8 @@ import { LocationDisplay } from "@/components/user-worklog/location-display"
 import { AuthGuard } from "@/components/auth-guard"
 import { LogOut, Users, Clock, Calendar, BarChart3 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { FullScreenCalendar } from "@/components/ui/fullscreen-calendar"
 
 function AdminDashboardContent() {
   const router = useRouter()
@@ -26,6 +28,9 @@ function AdminDashboardContent() {
         router.push("/dashboard")
       }
     }
+
+    // Dispatch auth change event to ensure sidebar updates
+    window.dispatchEvent(new Event("auth-change"))
   }, [router])
 
   const handleLogout = () => {
@@ -34,6 +39,10 @@ function AdminDashboardContent() {
     localStorage.removeItem("contact")
     localStorage.removeItem("userLocation")
     localStorage.removeItem("locationSkipped")
+
+    // Dispatch custom event to notify sidebar
+    window.dispatchEvent(new Event("auth-change"))
+
     router.push("/login")
   }
 
@@ -133,6 +142,78 @@ function AdminDashboardContent() {
     return total + hours + minutes / 60
   }, 0)
 
+  // Sample employee schedule data for calendar
+  const employeeScheduleData = [
+    {
+      day: new Date("2024-12-30"),
+      events: [
+        {
+          id: 1,
+          name: "John Doe - Clock In",
+          time: "09:15 AM",
+          datetime: "2024-12-30T09:15:00",
+        },
+        {
+          id: 2,
+          name: "Jane Smith - Clock In",
+          time: "08:45 AM",
+          datetime: "2024-12-30T08:45:00",
+        },
+      ],
+    },
+    {
+      day: new Date("2024-12-31"),
+      events: [
+        {
+          id: 3,
+          name: "Team Meeting",
+          time: "10:00 AM",
+          datetime: "2024-12-31T10:00:00",
+        },
+        {
+          id: 4,
+          name: "Mike Johnson - Late",
+          time: "09:45 AM",
+          datetime: "2024-12-31T09:45:00",
+        },
+      ],
+    },
+    {
+      day: new Date("2025-01-02"),
+      events: [
+        {
+          id: 5,
+          name: "Sarah Wilson - Clock In",
+          time: "08:30 AM",
+          datetime: "2025-01-02T08:30:00",
+        },
+        {
+          id: 6,
+          name: "David Brown - Absent",
+          time: "All Day",
+          datetime: "2025-01-02T00:00:00",
+        },
+      ],
+    },
+    {
+      day: new Date("2025-01-03"),
+      events: [
+        {
+          id: 7,
+          name: "Monthly Review",
+          time: "2:00 PM",
+          datetime: "2025-01-03T14:00:00",
+        },
+        {
+          id: 8,
+          name: "Training Session",
+          time: "11:00 AM",
+          datetime: "2025-01-03T11:00:00",
+        },
+      ],
+    },
+  ]
+
   if (!user || user.role !== "admin") {
     return null
   }
@@ -150,7 +231,7 @@ function AdminDashboardContent() {
               <p className="text-sm text-muted-foreground">Welcome back, {user.name}</p>
             </div>
           </div>
-          <Button variant="outline" onClick={handleLogout} className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleLogout} className="flex items-center gap-2 bg-transparent">
             <LogOut className="h-4 w-4" />
             Logout
           </Button>
@@ -295,6 +376,19 @@ function AdminDashboardContent() {
                   </div>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Employee Schedule Calendar */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Employee Schedule Calendar</CardTitle>
+            <p className="text-sm text-muted-foreground">View employee attendance, meetings, and important events</p>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[600px]">
+              <FullScreenCalendar data={employeeScheduleData} />
             </div>
           </CardContent>
         </Card>

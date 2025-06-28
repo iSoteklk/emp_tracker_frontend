@@ -1,12 +1,22 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Play, Pause, Square, X, AlertTriangle, Navigation, Building } from "lucide-react"
-import { workTimeConfig } from "@/lib/work-config"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Play, Pause, Square, X, AlertTriangle, Navigation, Building, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useLocation } from "@/hooks/use-location"
+import { LocationPermissionModal } from "@/components/modals/location-permission-modal"
+import { GeofenceModal } from "@/components/modals/geofence-modal"
+import { ClockOutGeofenceModal } from "@/components/modals/clock-out-geofence-modal"
+import { EarlyClockOutModal } from "@/components/modals/early-clock-out-modal"
+import {
+  formatElapsedTime,
+  formatTime,
+  formatDate,
+  formatTimezone,
+  calculateTimeDifference,
+  isLateTime,
+  isOvertimeHours,
+  getWorkingHoursText,
+} from "@/lib/date-time-utils"
 
 interface GlassTimeCardProps {
   showSeconds?: boolean
@@ -14,19 +24,22 @@ interface GlassTimeCardProps {
 }
 
 export function GlassTimeCard(props: GlassTimeCardProps) {
-  const config = workTimeConfig.getConfig()
-  const { showSeconds = config.showSeconds, showTimezone = false } = props
+  const { showSeconds = true, showTimezone = false } = props
 
   const [currentTime, setCurrentTime] = useState<Date>(new Date())
   const [isTracking, setIsTracking] = useState(false)
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [elapsedTime, setElapsedTime] = useState(0) // in seconds
-  const [timezoneName, setTimezoneName] = useState<string>("")
   const [isClockingIn, setIsClockingIn] = useState(false)
+  const [isClockingOut, setIsClockingOut] = useState(false)
   const [clockInError, setClockInError] = useState("")
+  const [clockOutError, setClockOutError] = useState("")
   const [showLocationModal, setShowLocationModal] = useState(false)
   const [showGeofenceModal, setShowGeofenceModal] = useState(false)
+  const [showClockOutGeofenceModal, setShowClockOutGeofenceModal] = useState(false)
+  const [showEarlyClockOutModal, setShowEarlyClockOutModal] = useState(false)
   const [clockInNotes, setClockInNotes] = useState("Starting my shift")
+  const [clockOutNotes, setClockOutNotes] = useState("Completed daily tasks")
 
   // Use the location hook
   const {
@@ -40,6 +53,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     isPermissionBlocked,
     isWithinOffice,
     getBrowserInstructions,
+    refreshLocation,
   } = useLocation({
     enableHighAccuracy: true,
     timeout: 15000,
@@ -85,24 +99,30 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   }, [isTracking, startTime, elapsedTime])
 
   useEffect(() => {
-    const timezoneOffset = currentTime.getTimezoneOffset()
-    const timezoneShorter = Intl.DateTimeFormat().resolvedOptions().timeZone
-    const offset = -timezoneOffset / 60
-    const offsetStr = offset >= 0 ? `+${offset}` : `${offset}`
-    setTimezoneName(`${timezoneShorter} GMT${offsetStr}`)
-
     const intervalId = setInterval(() => {
       setCurrentTime(new Date())
 
       if (isTracking && startTime) {
-        const now = new Date()
-        const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000)
-        setElapsedTime(elapsed)
+        const timeDiff = calculateTimeDifference(startTime)
+        setElapsedTime(timeDiff.totalSeconds)
       }
     }, 1000)
 
     return () => clearInterval(intervalId)
   }, [isTracking, startTime])
+
+  // Reset states when modals are closed
+  const resetClockInState = () => {
+    setIsClockingIn(false)
+    setClockInError("")
+    clearError()
+  }
+
+  const resetClockOutState = () => {
+    setIsClockingOut(false)
+    setClockOutError("")
+    clearError()
+  }
 
   const handleClockIn = async () => {
     setIsClockingIn(true)
@@ -110,30 +130,22 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     clearError()
 
     try {
-      console.log("Starting clock in process...")
-
       // Always get fresh location when clocking in
       const locationData = await getCurrentLocation(true) // Force refresh
-
-      console.log("Fresh location obtained:", locationData)
-      console.log("Geofence result:", geofenceResult)
 
       // Now proceed with clock in API call
       const token = localStorage.getItem("token")
       if (!token) {
         setClockInError("Please login first")
+        setIsClockingIn(false) // Reset button state
         return
       }
-
-      console.log("Attempting to clock in with fresh location...")
 
       const requestBody = {
         location: locationData,
         geofence: geofenceResult,
         notes: clockInNotes,
       }
-
-      console.log("Sending request body:", requestBody)
 
       const response = await fetch("/api/shift/clock-in", {
         method: "POST",
@@ -144,10 +156,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         body: JSON.stringify(requestBody),
       })
 
-      console.log("Response status:", response.status)
-
       const data = await response.json()
-      console.log("Response data:", data)
 
       if (response.ok && data.success === "true") {
         // Use the clock-in time from the server response or current time
@@ -157,21 +166,21 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         setIsTracking(true)
         setElapsedTime(0)
         setClockInError("")
-
-        console.log("Clock in successful:", data)
-        console.log("Timer started at:", clockInTime)
+        setIsClockingIn(false) // Reset button state
 
         // Show success message briefly
         setTimeout(() => {
           // You could add a success toast here if needed
         }, 1000)
       } else {
-        console.error("Clock in failed:", data)
         setClockInError(data.message || data.error || `Server error: ${response.status}`)
+        setIsClockingIn(false) // Reset button state
       }
     } catch (error) {
-      console.error("Location or clock-in error:", error)
       const errorMessage = error instanceof Error ? error.message : "Unknown error"
+
+      // Reset button state first
+      setIsClockingIn(false)
 
       // Check if it's a location permission error
       if (locationError?.type === "permission" || isPermissionBlocked) {
@@ -181,9 +190,104 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       } else {
         setClockInError(`Error: ${errorMessage}`)
       }
-    } finally {
-      setIsClockingIn(false)
     }
+  }
+
+  const handleClockOut = async () => {
+    // Check if user has worked less than 8 hours (28,800 seconds)
+    const EIGHT_HOURS_IN_SECONDS = 8 * 60 * 60 // 28,800 seconds
+
+    if (elapsedTime < EIGHT_HOURS_IN_SECONDS) {
+      setShowEarlyClockOutModal(true)
+      return
+    }
+
+    // Proceed with normal clock out
+    await performClockOut()
+  }
+
+  const performClockOut = async () => {
+    setIsClockingOut(true)
+    setClockOutError("")
+    clearError()
+
+    try {
+      // Always get fresh location when clocking out
+      const locationData = await getCurrentLocation(true) // Force refresh
+
+      // Check if user is within office for clock out
+      if (!geofenceResult?.isWithinOffice) {
+        setIsClockingOut(false)
+        setShowClockOutGeofenceModal(true)
+        return
+      }
+
+      // Now proceed with clock out API call
+      const token = localStorage.getItem("token")
+      if (!token) {
+        setClockOutError("Please login first")
+        setIsClockingOut(false)
+        return
+      }
+
+      const requestBody = {
+        location: locationData,
+        geofence: geofenceResult,
+        notes: clockOutNotes,
+      }
+
+      const response = await fetch("/api/shift/clock-out", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success === "true") {
+        // Successfully clocked out - stop the timer
+        setIsTracking(false)
+        setStartTime(null)
+        setElapsedTime(0)
+        setClockOutError("")
+        setIsClockingOut(false)
+
+        // Clear saved timer state
+        localStorage.removeItem("timerState")
+
+        // Show success message briefly
+        setTimeout(() => {
+          // You could add a success toast here if needed
+        }, 1000)
+      } else {
+        setClockOutError(data.message || data.error || `Server error: ${response.status}`)
+        setIsClockingOut(false)
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+
+      // Reset button state first
+      setIsClockingOut(false)
+
+      // Check if it's a geofence error
+      if (locationError?.type === "geofence" || errorMessage.includes("office")) {
+        setShowClockOutGeofenceModal(true)
+      } else {
+        setClockOutError(`Error: ${errorMessage}`)
+      }
+    }
+  }
+
+  const handleConfirmEarlyClockOut = async () => {
+    setShowEarlyClockOutModal(false)
+    await performClockOut()
+  }
+
+  const handleCancelEarlyClockOut = () => {
+    setShowEarlyClockOutModal(false)
   }
 
   const handlePause = () => {
@@ -196,67 +300,83 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   }
 
   const handleStop = () => {
-    setIsTracking(false)
-    setStartTime(null)
-    setElapsedTime(0)
-    localStorage.removeItem("timerState")
+    // For stop button, we need to clock out properly
+    handleClockOut()
+  }
+
+  const handleRefresh = async () => {
+    try {
+      await refreshLocation()
+    } catch (error) {
+      console.error("Failed to refresh location:", error)
+    }
   }
 
   const handleCloseLocationModal = () => {
     setShowLocationModal(false)
-    clearError()
+    resetClockInState() // Reset all states
   }
 
   const handleCloseGeofenceModal = () => {
     setShowGeofenceModal(false)
-    clearError()
+    resetClockInState() // Reset all states
   }
 
-  const formatElapsedTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const secs = seconds % 60
-
-    if (showSeconds) {
-      return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-    }
-    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`
+  const handleCloseClockOutGeofenceModal = () => {
+    setShowClockOutGeofenceModal(false)
+    resetClockOutState() // Reset all states
   }
 
-  const formatTime = (date: Date): string => {
-    return workTimeConfig.formatTime(date)
+  const handleRetryFromLocationModal = async () => {
+    setShowLocationModal(false)
+    // Small delay to allow modal to close
+    setTimeout(() => {
+      handleClockIn()
+    }, 100)
   }
 
-  const formatDate = (date: Date): string => {
-    const day = date.getDate()
-    const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    const weekday = weekdays[date.getDay()]
-    const months = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ]
-    const month = months[date.getMonth()]
-    return `${weekday} | ${month} ${day}`
+  const handleRetryFromGeofenceModal = async () => {
+    setShowGeofenceModal(false)
+    // Small delay to allow modal to close
+    setTimeout(() => {
+      handleClockIn()
+    }, 100)
   }
 
-  // Use configuration for late detection
-  const isLate = startTime && workTimeConfig.isLate(startTime)
+  const handleRetryFromClockOutGeofenceModal = async () => {
+    setShowClockOutGeofenceModal(false)
+    // Small delay to allow modal to close
+    setTimeout(() => {
+      performClockOut()
+    }, 100)
+  }
 
-  // Use configuration for overtime detection
+  const clearClockInError = () => {
+    setClockInError("")
+  }
+
+  const clearClockOutError = () => {
+    setClockOutError("")
+  }
+
+  // Use utility functions for calculations
+  const isLate = startTime && isLateTime(startTime)
   const workedHours = elapsedTime / 3600
-  const isOvertime = workTimeConfig.isOvertime(workedHours)
+  const isOvertime = isOvertimeHours(workedHours)
 
-  const isLoading = isClockingIn || isGettingLocation
+  const isLoading = isClockingIn || isClockingOut || isGettingLocation
+
+  // Determine if clock-in button should be disabled
+  const isClockInDisabled = isLoading || isTracking
+
+  // Determine if stop button should be disabled
+  const isStopDisabled = !startTime || isLoading
+
+  // Calculate remaining time to complete 8 hours
+  const EIGHT_HOURS_IN_SECONDS = 8 * 60 * 60
+  const remainingTime = Math.max(0, EIGHT_HOURS_IN_SECONDS - elapsedTime)
+  const hoursWorked = Math.floor(elapsedTime / 3600)
+  const minutesWorked = Math.floor((elapsedTime % 3600) / 60)
 
   return (
     <>
@@ -264,14 +384,14 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         <div className="flex flex-col gap-4 items-center">
           {/* Current Time */}
           <div className="text-center">
-            <div className="text-sm opacity-80">{formatDate(currentTime)}</div>
-            <div className="text-2xl font-bold tabular-nums">{formatTime(currentTime)}</div>
-            {showTimezone && <div className="text-xs text-white/70">{timezoneName}</div>}
+            <div className="text-sm opacity-80">{formatDate(currentTime, { includeWeekday: true })}</div>
+            <div className="text-2xl font-bold tabular-nums">{formatTime(currentTime, { showSeconds })}</div>
+            {showTimezone && <div className="text-xs text-white/70">{formatTimezone()}</div>}
           </div>
 
           {/* Work Schedule Info */}
           <div className="text-center text-xs opacity-70">
-            <div>Work Hours: {workTimeConfig.getWorkingHoursText()}</div>
+            <div>Work Hours: {getWorkingHoursText()}</div>
           </div>
 
           {/* Location Status Indicators */}
@@ -304,7 +424,17 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
           {/* Task Timer */}
           <div className="text-center w-full">
             <div className="text-sm opacity-80 mb-2">Task Timer</div>
-            <div className="text-4xl font-bold tabular-nums mb-4">{formatElapsedTime(elapsedTime)}</div>
+            <div className="text-4xl font-bold tabular-nums mb-4">{formatElapsedTime(elapsedTime, showSeconds)}</div>
+
+            {/* Work Progress Info */}
+            {startTime && elapsedTime < EIGHT_HOURS_IN_SECONDS && (
+              <div className="mb-4 p-2 bg-blue-500/20 border border-blue-500/30 rounded text-blue-200 text-xs">
+                <div className="font-semibold">
+                  Progress: {hoursWorked}h {minutesWorked}m / 8h
+                </div>
+                <div className="opacity-80">Remaining: {formatElapsedTime(remainingTime, false)}</div>
+              </div>
+            )}
 
             {/* Status Indicators */}
             <div className="flex justify-center gap-4 mb-4">
@@ -326,7 +456,13 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
                   <span className="text-xs">Getting Location...</span>
                 </div>
               )}
-              {isTracking && (
+              {isClockingOut && (
+                <div className="flex items-center gap-1 text-orange-300">
+                  <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></div>
+                  <span className="text-xs">Clocking Out...</span>
+                </div>
+              )}
+              {isTracking && !isClockingOut && (
                 <div className="flex items-center gap-1 text-green-300">
                   <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
                   <span className="text-xs">Active</span>
@@ -334,22 +470,47 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
               )}
             </div>
 
-            {/* Error Message */}
+            {/* Error Messages with Dismiss Button */}
             {clockInError && (
-              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-200 text-sm max-w-full break-words">
-                <div className="font-semibold mb-1">Error:</div>
-                <div className="text-xs">{clockInError}</div>
+              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-200 text-sm max-w-full break-words relative">
+                <button
+                  onClick={clearClockInError}
+                  className="absolute top-1 right-1 text-red-300 hover:text-red-100 transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+                <div className="font-semibold mb-1">Clock In Error:</div>
+                <div className="text-xs pr-6">{clockInError}</div>
+                <button onClick={clearClockInError} className="mt-2 text-xs text-red-300 hover:text-red-100 underline">
+                  Try Again
+                </button>
+              </div>
+            )}
+
+            {clockOutError && (
+              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-200 text-sm max-w-full break-words relative">
+                <button
+                  onClick={clearClockOutError}
+                  className="absolute top-1 right-1 text-red-300 hover:text-red-100 transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+                <div className="font-semibold mb-1">Clock Out Error:</div>
+                <div className="text-xs pr-6">{clockOutError}</div>
+                <button onClick={clearClockOutError} className="mt-2 text-xs text-red-300 hover:text-red-100 underline">
+                  Try Again
+                </button>
               </div>
             )}
 
             {/* Control Buttons */}
-            <div className="flex justify-center gap-3">
+            <div className="flex justify-center gap-2">
               {!isTracking ? (
                 <>
                   {!startTime ? (
                     <button
                       onClick={handleClockIn}
-                      disabled={isLoading}
+                      disabled={isClockInDisabled}
                       className="flex items-center gap-2 px-4 py-2 bg-green-500/80 hover:bg-green-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Play className="w-4 h-4" />
@@ -379,158 +540,78 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
 
               <button
                 onClick={handleStop}
-                className="flex items-center gap-2 px-4 py-2 bg-red-500/80 hover:bg-red-500 rounded-lg transition-colors"
-                disabled={!startTime}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/80 hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isStopDisabled}
               >
                 <Square className="w-4 w-4" />
-                <span className="text-sm">Stop</span>
+                <span className="text-sm">{isClockingOut ? "Clocking Out..." : "Clock Out"}</span>
+              </button>
+
+              {/* Refresh Button */}
+              <button
+                onClick={handleRefresh}
+                disabled={isGettingLocation}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500/80 hover:bg-blue-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh location and geofence status"
+              >
+                <RefreshCw className={`w-4 h-4 ${isGettingLocation ? "animate-spin" : ""}`} />
+                <span className="text-sm">Refresh</span>
               </button>
             </div>
 
             {/* Start Time Display */}
             {startTime && (
               <div className="mt-3 text-xs opacity-70">
-                Clocked in at: {workTimeConfig.formatTime(startTime)}
+                Clocked in at: {formatTime(startTime)}
                 {isLate && <span className="text-red-300 ml-2">(Late)</span>}
               </div>
             )}
 
             {/* Timer State Info */}
-            {startTime && !isTracking && (
+            {startTime && !isTracking && !isClockingOut && (
               <div className="mt-2 text-xs opacity-70 text-yellow-300">Timer paused - Click Resume to continue</div>
             )}
           </div>
         </div>
       </div>
 
+      {/* Early Clock Out Confirmation Modal */}
+      <EarlyClockOutModal
+        isOpen={showEarlyClockOutModal}
+        onClose={handleCancelEarlyClockOut}
+        onConfirm={handleConfirmEarlyClockOut}
+        elapsedTime={elapsedTime}
+        isLoading={isClockingOut}
+      />
+
       {/* Location Permission Modal */}
-      {showLocationModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-red-500" />
-                  <CardTitle className="text-lg">Location Access Blocked</CardTitle>
-                </div>
-                <Button variant="ghost" size="sm" onClick={handleCloseLocationModal} className="h-6 w-6 p-0">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="font-medium">
-                  {locationError?.message || "Location access has been permanently blocked for this site."}
-                </AlertDescription>
-              </Alert>
+      <LocationPermissionModal
+        isOpen={showLocationModal}
+        onClose={handleCloseLocationModal}
+        onRetry={handleRetryFromLocationModal}
+        locationError={locationError}
+        getBrowserInstructions={getBrowserInstructions}
+      />
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{getBrowserInstructions().icon}</span>
-                  <h3 className="font-semibold">How to Fix This in {getBrowserInstructions().browser}:</h3>
-                </div>
+      {/* Clock In Geofence Modal */}
+      <GeofenceModal
+        isOpen={showGeofenceModal}
+        onClose={handleCloseGeofenceModal}
+        onRetry={handleRetryFromGeofenceModal}
+        locationError={locationError}
+        geofenceResult={geofenceResult}
+        isLoading={isLoading}
+      />
 
-                <ol className="space-y-2">
-                  {getBrowserInstructions().steps.map((step, index) => (
-                    <li key={index} className="flex gap-3 text-sm">
-                      <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-medium">
-                        {index + 1}
-                      </span>
-                      <span className="text-muted-foreground">{step}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-
-              <div className="flex gap-2">
-                <Button onClick={handleCloseLocationModal} className="flex-1">
-                  I'll Enable Location
-                </Button>
-                <Button variant="outline" onClick={handleCloseLocationModal} className="flex-1">
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Geofence Modal */}
-      {showGeofenceModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Navigation className="h-5 w-5 text-orange-500" />
-                  <CardTitle className="text-lg">Get Closer to Office</CardTitle>
-                </div>
-                <Button variant="ghost" size="sm" onClick={handleCloseGeofenceModal} className="h-6 w-6 p-0">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Alert className="border-orange-200 bg-orange-50">
-                <Navigation className="h-4 w-4 text-orange-600" />
-                <AlertDescription className="text-orange-800">
-                  {locationError?.message || "You need to be within the office area to clock in."}
-                </AlertDescription>
-              </Alert>
-
-              {geofenceResult && (
-                <div className="space-y-3">
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                    <h3 className="font-semibold text-blue-900 mb-2">Distance Information:</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-blue-700">Current Distance:</span>
-                        <span className="font-medium text-blue-900">{geofenceResult.distance}m</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-blue-700">Required Distance:</span>
-                        <span className="font-medium text-blue-900">≤ {geofenceResult.office.radius}m</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-blue-700">Move Closer By:</span>
-                        <span className="font-medium text-red-600">
-                          {Math.max(0, geofenceResult.distance - geofenceResult.office.radius).toFixed(1)}m
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <h3 className="font-semibold text-green-900 mb-2">Office Location:</h3>
-                    <div className="text-sm text-green-700 space-y-1">
-                      <div>
-                        <strong>{geofenceResult.office.name}</strong>
-                      </div>
-                      {geofenceResult.office.address && <div>{geofenceResult.office.address}</div>}
-                      <div>
-                        Coordinates: {geofenceResult.office.latitude.toFixed(6)},{" "}
-                        {geofenceResult.office.longitude.toFixed(6)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <Button onClick={handleClockIn} disabled={isLoading} className="flex-1 gap-2">
-                  <Navigation className="h-4 w-4" />
-                  {isLoading ? "Checking..." : "Try Again"}
-                </Button>
-                <Button variant="outline" onClick={handleCloseGeofenceModal} className="flex-1">
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {/* Clock Out Geofence Modal */}
+      <ClockOutGeofenceModal
+        isOpen={showClockOutGeofenceModal}
+        onClose={handleCloseClockOutGeofenceModal}
+        onRetry={handleRetryFromClockOutGeofenceModal}
+        locationError={locationError}
+        geofenceResult={geofenceResult}
+        isLoading={isLoading}
+      />
     </>
   )
 }

@@ -60,12 +60,18 @@ export default function LoginPage() {
 
         localStorage.setItem("user", JSON.stringify(userData))
 
-        // Role-based routing - direct redirect without location step
-        if (userData.role === "admin") {
-          router.push("/admin")
-        } else {
-          router.push("/dashboard")
-        }
+        // Dispatch custom event to notify sidebar and other components
+        window.dispatchEvent(new Event("auth-change"))
+
+        // Small delay to ensure event is processed
+        setTimeout(() => {
+          // Role-based routing - direct redirect without location step
+          if (userData.role === "admin") {
+            router.push("/admin")
+          } else {
+            router.push("/dashboard")
+          }
+        }, 100)
       } else {
         setError(data.message || "Login failed. Please check your credentials.")
       }

@@ -32,30 +32,30 @@ export async function POST(request: NextRequest) {
     const dateAtMidnightUTC = new Date(todayInUserTz.getTime() - todayInUserTz.getTimezoneOffset() * 60000)
 
     // Create the request body in the expected format
-    const clockInData = {
+    const clockOutData = {
       date: dateAtMidnightUTC.toISOString(), // Use consistent date format
-      clockInTime: now.toISOString(), // Current timestamp
-      clockInLocation: {
+      clockOutTime: now.toISOString(), // Current timestamp
+      clockOutLocation: {
         latitude: location.latitude,
         longitude: location.longitude,
         address: location.address || "Location not available",
         accuracy: location.accuracy || 10,
       },
-      notes: notes || "Clock in via web app",
+      notes: notes || "Clock out via web app",
     }
 
-    console.log("Sending clock-in request with data:", clockInData)
-    console.log("Date being used:", clockInData.date)
-    console.log("Clock in time:", clockInData.clockInTime)
+    console.log("Sending clock-out request with data:", clockOutData)
+    console.log("Date being used:", clockOutData.date)
+    console.log("Clock out time:", clockOutData.clockOutTime)
 
-    // Make the API call to the external clock-in endpoint
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/shift/clock-in`, {
+    // Make the API call to the external clock-out endpoint
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/shift/clock-out`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: authHeader,
       },
-      body: JSON.stringify(clockInData),
+      body: JSON.stringify(clockOutData),
     })
 
     const data = await response.json()
@@ -66,10 +66,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: "true",
-          message: "Clock in successful",
+          message: "Clock out successful",
           data: data,
-          clockInTime: clockInData.clockInTime,
-          location: clockInData.clockInLocation,
+          clockOutTime: clockOutData.clockOutTime,
+          location: clockOutData.clockOutLocation,
         },
         { status: 200 },
       )
@@ -78,14 +78,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: "false",
-          message: data.message || data.error || "Clock in failed",
+          message: data.message || data.error || "Clock out failed",
           error: data,
         },
         { status: response.status },
       )
     }
   } catch (error) {
-    console.error("Clock-in API error:", error)
+    console.error("Clock-out API error:", error)
     return NextResponse.json(
       {
         success: "false",
