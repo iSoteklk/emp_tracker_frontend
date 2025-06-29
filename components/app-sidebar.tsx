@@ -235,20 +235,22 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar variant="inset" collapsible="icon">
-      <SidebarHeader>
+    <Sidebar variant="inset" collapsible="icon" className="border-r border-blue-200">
+      <SidebarHeader className="bg-gradient-to-r from-blue-50 to-sky-50 border-b border-blue-200">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <a href={user.role === "admin" ? "/admin" : "/dashboard"}>
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-gradient-to-r from-blue-500 to-sky-500 text-white shadow-md">
                   {user.role === "admin" ? <Shield className="size-4" /> : <Clock className="size-4" />}
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">
+                  <span className="truncate font-semibold text-blue-800">
                     {user.role === "admin" ? "Admin Panel" : "Time Tracker"}
                   </span>
-                  <span className="truncate text-xs">{user.role === "admin" ? "Management" : "Employee"}</span>
+                  <span className="truncate text-xs text-blue-600">
+                    {user.role === "admin" ? "Management" : "Employee"}
+                  </span>
                 </div>
               </a>
             </SidebarMenuButton>
@@ -256,17 +258,24 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="bg-gradient-to-b from-blue-50/50 to-sky-50/30">
         <SidebarGroup>
-          <SidebarGroupLabel>{user.role === "admin" ? "Administration" : "My Workspace"}</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-blue-700 font-medium">
+            {user.role === "admin" ? "Administration" : "My Workspace"}
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={item.title} isActive={isActiveRoute(item.url)}>
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={item.title}
+                    isActive={isActiveRoute(item.url)}
+                    className="hover:bg-blue-100 data-[active=true]:bg-blue-200 data-[active=true]:text-blue-800"
+                  >
                     <a href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
+                      <item.icon className="text-blue-600" />
+                      <span className="text-slate-700">{item.title}</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -275,18 +284,23 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator />
+        <SidebarSeparator className="bg-blue-200" />
 
         <SidebarGroup>
-          <SidebarGroupLabel>Account</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-blue-700 font-medium">Account</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {commonNavigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={item.title} isActive={isActiveRoute(item.url)}>
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={item.title}
+                    isActive={isActiveRoute(item.url)}
+                    className="hover:bg-blue-100 data-[active=true]:bg-blue-200 data-[active=true]:text-blue-800"
+                  >
                     <a href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
+                      <item.icon className="text-blue-600" />
+                      <span className="text-slate-700">{item.title}</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -307,7 +321,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="bg-gradient-to-r from-blue-50 to-sky-50 border-t border-blue-200">
         <SidebarUserNav user={user} onLogout={handleLogout} />
       </SidebarFooter>
     </Sidebar>

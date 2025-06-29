@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { GlassTimeCard } from "@/components/user-worklog/glass-time-card"
+import { GlassTimeCard } from "@/components/user-worklog/time-card"
 import { WorkLogTable } from "@/components/work-log-table"
 import { LocationDisplay } from "@/components/user-worklog/location-display"
 import { LocationPermissionHelper } from "@/components//user-worklog/location-permission-helper"
@@ -54,13 +54,13 @@ function UserDashboardContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen">
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <SidebarTrigger />
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <h1 className="text-3xl font-bold  bg-clip-text text-transparent">
                 Time Tracking Dashboard
               </h1>
               {user && (
@@ -84,7 +84,7 @@ function UserDashboardContent() {
             <div className="flex justify-center items-start">
               <div className="relative">
                 {/* Background gradient for glass effect */}
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 rounded-lg blur-xl opacity-30"></div>
+                <div className="absolute inset-0 rounded-lg blur-xl opacity-30"></div>
                 <div className="relative">
                   <GlassTimeCard showSeconds showTimezone />
                 </div>
