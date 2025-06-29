@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     console.log("Fetching users from backend API...")
 
-    const response = await fetch("http://localhost:4000/api/v1/users/getall", {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/users/getall`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",

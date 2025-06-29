@@ -150,7 +150,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       const todayDate = getTodayDateString()
       console.log("Fetching shift status for date:", todayDate)
 
-      const response = await fetch(`http://localhost:4000/api/v1/shift/me/date/${todayDate}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/shift/me/date/${todayDate}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",

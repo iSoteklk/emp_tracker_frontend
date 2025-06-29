@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       password: password,
     }
 
-    const externalApiUrl = `http://localhost:4000/api/v1/users/create`
+    const externalApiUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/users/create`
     console.log("🌐 Calling external API:", externalApiUrl)
     console.log("📤 Sending data:", { ...createUserData, password: "[HIDDEN]" })
 

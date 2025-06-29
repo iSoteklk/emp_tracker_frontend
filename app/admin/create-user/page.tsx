@@ -120,7 +120,7 @@ function CreateUserContent() {
       console.log("Sending create user request to backend:", { ...requestBody, password: "[HIDDEN]" })
 
       // Updated URL to point to your backend server
-      const backendUrl = "http://localhost:4000/api/v1/users/create"
+      const backendUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/users/create`
       console.log("Making request to:", backendUrl)
 
       const response = await fetch(backendUrl, {
@@ -180,7 +180,7 @@ function CreateUserContent() {
       console.error("Create user error:", error)
 
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        setError("Cannot connect to backend server. Please ensure the backend is running on http://localhost:4000")
+        setError(`Cannot connect to backend server. Please ensure the backend is running on ${process.env.NEXT_PUBLIC_API_BASE_URL}`)
       } else if (error instanceof SyntaxError && error.message.includes("JSON")) {
         setError("Server returned invalid response format. Please check if the API is running correctly.")
       } else {
