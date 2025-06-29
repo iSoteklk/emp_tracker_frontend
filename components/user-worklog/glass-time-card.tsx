@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Play, Pause, Square, X, AlertTriangle, Navigation, Building, RefreshCw } from "lucide-react"
+import { Play, Square, X, AlertTriangle, Navigation, Building, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useLocation } from "@/hooks/use-location"
 import { LocationPermissionModal } from "@/components/modals/location-permission-modal"
@@ -16,11 +16,42 @@ import {
   isLateTime,
   isOvertimeHours,
   getWorkingHoursText,
+  getTodayDateString,
 } from "@/lib/date-time-utils"
 
 interface GlassTimeCardProps {
   showSeconds?: boolean
   showTimezone?: boolean
+}
+
+interface ShiftData {
+  _id: string
+  email: string
+  date: string
+  clockInTime?: string
+  clockOutTime?: string
+  clockInLocation?: {
+    latitude: number
+    longitude: number
+    address: string
+    accuracy: number
+  }
+  clockOutLocation?: {
+    latitude: number
+    longitude: number
+    address: string
+    accuracy: number
+  }
+  totalHours: string
+  status: "clocked-in" | "clocked-out"
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface ShiftStatusResponse {
+  success: string
+  data: ShiftData[]
 }
 
 export function GlassTimeCard(props: GlassTimeCardProps) {
@@ -40,6 +71,11 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   const [showEarlyClockOutModal, setShowEarlyClockOutModal] = useState(false)
   const [clockInNotes, setClockInNotes] = useState("Starting my shift")
   const [clockOutNotes, setClockOutNotes] = useState("Completed daily tasks")
+
+  // Shift status state
+  const [shiftStatus, setShiftStatus] = useState<"loading" | "no-shift" | "clocked-in" | "clocked-out">("loading")
+  const [shiftData, setShiftData] = useState<ShiftData | null>(null)
+  const [isLoadingShiftStatus, setIsLoadingShiftStatus] = useState(true)
 
   // Use the location hook
   const {
@@ -62,41 +98,30 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     autoRefreshOnClockIn: true,
   })
 
-  // Load saved timer state on mount
+  // Fetch shift status on component mount
   useEffect(() => {
-    const savedTimerState = localStorage.getItem("timerState")
-    if (savedTimerState) {
-      try {
-        const timerState = JSON.parse(savedTimerState)
-        if (timerState.isTracking && timerState.startTime) {
-          const savedStartTime = new Date(timerState.startTime)
-          const now = new Date()
-          const elapsed = Math.floor((now.getTime() - savedStartTime.getTime()) / 1000)
-
-          setIsTracking(true)
-          setStartTime(savedStartTime)
-          setElapsedTime(elapsed)
-        }
-      } catch (error) {
-        console.error("Error loading timer state:", error)
-        localStorage.removeItem("timerState")
-      }
-    }
+    fetchShiftStatus()
   }, [])
 
-  // Save timer state when it changes
+  // Load saved timer state on mount (only if clocked in)
   useEffect(() => {
-    if (isTracking && startTime) {
-      const timerState = {
-        isTracking,
-        startTime: startTime.toISOString(),
-        elapsedTime,
-      }
-      localStorage.setItem("timerState", JSON.stringify(timerState))
+    if (shiftStatus === "clocked-in" && shiftData) {
+      // Calculate elapsed time from clock in time
+      const clockInTime = new Date(shiftData.clockInTime!)
+      const now = new Date()
+      const elapsed = Math.floor((now.getTime() - clockInTime.getTime()) / 1000)
+
+      setIsTracking(true)
+      setStartTime(clockInTime)
+      setElapsedTime(elapsed)
     } else {
+      // Clear any saved timer state if not clocked in
+      setIsTracking(false)
+      setStartTime(null)
+      setElapsedTime(0)
       localStorage.removeItem("timerState")
     }
-  }, [isTracking, startTime, elapsedTime])
+  }, [shiftStatus, shiftData])
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -110,6 +135,53 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
 
     return () => clearInterval(intervalId)
   }, [isTracking, startTime])
+
+  const fetchShiftStatus = async () => {
+    setIsLoadingShiftStatus(true)
+    try {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        console.error("No token found")
+        setShiftStatus("no-shift")
+        setIsLoadingShiftStatus(false)
+        return
+      }
+
+      const todayDate = getTodayDateString()
+      console.log("Fetching shift status for date:", todayDate)
+
+      const response = await fetch(`http://localhost:4000/api/v1/shift/me/date/${todayDate}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const data: ShiftStatusResponse = await response.json()
+      console.log("Shift status response:", data)
+
+      if (response.ok && data.success === "true") {
+        if (data.data && data.data.length > 0) {
+          const shift = data.data[0]
+          setShiftData(shift)
+          setShiftStatus(shift.status === "clocked-in" ? "clocked-in" : "clocked-out")
+        } else {
+          // Empty data array means no shift for today
+          setShiftStatus("no-shift")
+          setShiftData(null)
+        }
+      } else {
+        console.error("Failed to fetch shift status:", data)
+        setShiftStatus("no-shift")
+      }
+    } catch (error) {
+      console.error("Error fetching shift status:", error)
+      setShiftStatus("no-shift")
+    } finally {
+      setIsLoadingShiftStatus(false)
+    }
+  }
 
   // Reset states when modals are closed
   const resetClockInState = () => {
@@ -159,12 +231,8 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       const data = await response.json()
 
       if (response.ok && data.success === "true") {
-        // Use the clock-in time from the server response or current time
-        const clockInTime = data.clockInTime ? new Date(data.clockInTime) : new Date()
-
-        setStartTime(clockInTime)
-        setIsTracking(true)
-        setElapsedTime(0)
+        // Successfully clocked in - refresh shift status
+        await fetchShiftStatus()
         setClockInError("")
         setIsClockingIn(false) // Reset button state
 
@@ -248,10 +316,8 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       const data = await response.json()
 
       if (response.ok && data.success === "true") {
-        // Successfully clocked out - stop the timer
-        setIsTracking(false)
-        setStartTime(null)
-        setElapsedTime(0)
+        // Successfully clocked out - refresh shift status
+        await fetchShiftStatus()
         setClockOutError("")
         setIsClockingOut(false)
 
@@ -290,25 +356,12 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     setShowEarlyClockOutModal(false)
   }
 
-  const handlePause = () => {
-    setIsTracking(false)
-    // Keep the start time so we can resume
-  }
-
-  const handleResume = () => {
-    setIsTracking(true)
-  }
-
-  const handleStop = () => {
-    // For stop button, we need to clock out properly
-    handleClockOut()
-  }
-
   const handleRefresh = async () => {
     try {
       await refreshLocation()
+      await fetchShiftStatus()
     } catch (error) {
-      console.error("Failed to refresh location:", error)
+      console.error("Failed to refresh:", error)
     }
   }
 
@@ -364,13 +417,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   const workedHours = elapsedTime / 3600
   const isOvertime = isOvertimeHours(workedHours)
 
-  const isLoading = isClockingIn || isClockingOut || isGettingLocation
-
-  // Determine if clock-in button should be disabled
-  const isClockInDisabled = isLoading || isTracking
-
-  // Determine if stop button should be disabled
-  const isStopDisabled = !startTime || isLoading
+  const isLoading = isClockingIn || isClockingOut || isGettingLocation || isLoadingShiftStatus
 
   // Calculate remaining time to complete 8 hours
   const EIGHT_HOURS_IN_SECONDS = 8 * 60 * 60
@@ -378,40 +425,219 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   const hoursWorked = Math.floor(elapsedTime / 3600)
   const minutesWorked = Math.floor((elapsedTime % 3600) / 60)
 
+  // Render different content based on shift status
+  const renderShiftContent = () => {
+    if (isLoadingShiftStatus) {
+      return (
+        <div className="text-center">
+          <div className="text-sm text-slate-600 mb-2">Loading shift status...</div>
+          <div className="text-2xl font-bold tabular-nums mb-4 text-slate-700">--:--:--</div>
+        </div>
+      )
+    }
+
+    if (shiftStatus === "clocked-out") {
+      return (
+        <div className="text-center">
+          <div className="text-sm text-slate-600 mb-2">Shift Status</div>
+          <div className="text-xl font-bold mb-4 text-emerald-600">Your shift is over for today</div>
+          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-sm">
+            <div className="font-semibold">Shift Completed</div>
+            {shiftData && (
+              <div className="text-xs mt-1">
+                Total Hours: {shiftData.totalHours}
+                {shiftData.clockOutTime && <div>Clocked out at: {formatTime(new Date(shiftData.clockOutTime))}</div>}
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    if (shiftStatus === "clocked-in") {
+      return (
+        <div className="text-center w-full">
+          <div className="text-sm text-slate-600 mb-2">Active Shift</div>
+          <div className="text-4xl font-bold tabular-nums mb-4 text-slate-800">
+            {formatElapsedTime(elapsedTime, showSeconds)}
+          </div>
+
+          {/* Work Progress Info */}
+          {elapsedTime < EIGHT_HOURS_IN_SECONDS && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+              <div className="font-semibold">
+                Progress: {hoursWorked}h {minutesWorked}m / 8h
+              </div>
+              <div className="text-blue-600">Remaining: {formatElapsedTime(remainingTime, false)}</div>
+            </div>
+          )}
+
+          {/* Status Indicators */}
+          <div className="flex justify-center gap-4 mb-4">
+            {isLate && (
+              <div className="flex items-center gap-1 text-red-600">
+                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                <span className="text-xs font-medium">Late</span>
+              </div>
+            )}
+            {isOvertime && (
+              <div className="flex items-center gap-1 text-emerald-600">
+                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                <span className="text-xs font-medium">Overtime</span>
+              </div>
+            )}
+            {isGettingLocation && (
+              <div className="flex items-center gap-1 text-blue-600">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                <span className="text-xs font-medium">Getting Location...</span>
+              </div>
+            )}
+            {isClockingOut && (
+              <div className="flex items-center gap-1 text-orange-600">
+                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
+                <span className="text-xs font-medium">Clocking Out...</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1 text-emerald-600">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+              <span className="text-xs font-medium">Active</span>
+            </div>
+          </div>
+
+          {/* Start Time Display */}
+          {startTime && (
+            <div className="mt-3 text-xs text-slate-600">
+              Clocked in at: {formatTime(startTime)}
+              {isLate && <span className="text-red-600 ml-2 font-medium">(Late)</span>}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    // Default case: no shift (show clock in option)
+    return (
+      <div className="text-center w-full">
+        <div className="text-sm text-slate-600 mb-2">Ready to Start</div>
+        <div className="text-4xl font-bold tabular-nums mb-4 text-slate-800">00:00:00</div>
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+          <div className="font-semibold">No active shift</div>
+          <div className="text-xs text-blue-600">Click Clock In to start your shift</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Render control buttons based on shift status
+  const renderControlButtons = () => {
+    if (shiftStatus === "clocked-out") {
+      // Only show refresh button when shift is completed
+      return (
+        <div className="flex justify-center gap-3">
+          <button
+            onClick={handleRefresh}
+            disabled={isGettingLocation || isLoadingShiftStatus}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+            title="Refresh status"
+          >
+            <RefreshCw className={`w-4 h-4 ${isGettingLocation || isLoadingShiftStatus ? "animate-spin" : ""}`} />
+            <span className="text-sm">Refresh</span>
+          </button>
+        </div>
+      )
+    }
+
+    if (shiftStatus === "clocked-in") {
+      // Only show clock out and refresh buttons when clocked in
+      return (
+        <div className="flex justify-center gap-3">
+          <button
+            onClick={handleClockOut}
+            className="flex items-center gap-2 px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+            disabled={isClockingOut}
+          >
+            <Square className="w-4 h-4" />
+            <span className="text-sm">{isClockingOut ? "Clocking Out..." : "Clock Out"}</span>
+          </button>
+
+          <button
+            onClick={handleRefresh}
+            disabled={isGettingLocation || isLoadingShiftStatus}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+            title="Refresh location and status"
+          >
+            <RefreshCw className={`w-4 h-4 ${isGettingLocation || isLoadingShiftStatus ? "animate-spin" : ""}`} />
+            <span className="text-sm">Refresh</span>
+          </button>
+        </div>
+      )
+    }
+
+    // Default case: no shift (show clock in and refresh buttons)
+    return (
+      <div className="flex justify-center gap-3">
+        <button
+          onClick={handleClockIn}
+          disabled={isClockingIn || isLoadingShiftStatus}
+          className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+        >
+          <Play className="w-4 h-4" />
+          <span className="text-sm">
+            {isClockingIn ? (isGettingLocation ? "Getting Location..." : "Clocking In...") : "Clock In"}
+          </span>
+        </button>
+
+        <button
+          onClick={handleRefresh}
+          disabled={isGettingLocation || isLoadingShiftStatus}
+          className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+          title="Refresh location and status"
+        >
+          <RefreshCw className={`w-4 h-4 ${isGettingLocation || isLoadingShiftStatus ? "animate-spin" : ""}`} />
+          <span className="text-sm">Refresh</span>
+        </button>
+      </div>
+    )
+  }
+
   return (
     <>
-      <div className="w-96 text-white bg-white/20 shadow-xl backdrop-blur-xl p-6 rounded-lg border border-white/10">
+      <div className="w-96 bg-gradient-to-br from-blue-50 to-sky-100 shadow-xl p-6 rounded-2xl border border-blue-200/50">
         <div className="flex flex-col gap-4 items-center">
           {/* Current Time */}
           <div className="text-center">
-            <div className="text-sm opacity-80">{formatDate(currentTime, { includeWeekday: true })}</div>
-            <div className="text-2xl font-bold tabular-nums">{formatTime(currentTime, { showSeconds })}</div>
-            {showTimezone && <div className="text-xs text-white/70">{formatTimezone()}</div>}
+            <div className="text-sm text-slate-600 font-medium">
+              {formatDate(currentTime, { includeWeekday: true })}
+            </div>
+            <div className="text-3xl font-bold tabular-nums text-slate-800">
+              {formatTime(currentTime, { showSeconds })}
+            </div>
+            {showTimezone && <div className="text-xs text-slate-500">{formatTimezone()}</div>}
           </div>
 
           {/* Work Schedule Info */}
-          <div className="text-center text-xs opacity-70">
+          <div className="text-center text-xs text-slate-600 bg-white/50 px-3 py-1 rounded-full">
             <div>Work Hours: {getWorkingHoursText()}</div>
           </div>
 
           {/* Location Status Indicators */}
           <div className="flex flex-wrap justify-center gap-2">
             {isPermissionBlocked && (
-              <Badge variant="destructive" className="gap-2">
+              <Badge variant="destructive" className="gap-2 bg-red-100 text-red-700 border-red-200">
                 <AlertTriangle className="h-3 w-3" />
                 Location Blocked
               </Badge>
             )}
 
             {isWithinOffice && geofenceResult && (
-              <Badge variant="secondary" className="bg-green-100 text-green-800 gap-2">
+              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-2">
                 <Building className="h-3 w-3" />
                 At {geofenceResult.office.name}
               </Badge>
             )}
 
             {location && !isWithinOffice && geofenceResult && (
-              <Badge variant="destructive" className="gap-2">
+              <Badge variant="destructive" className="gap-2 bg-orange-100 text-orange-700 border-orange-200">
                 <Navigation className="h-3 w-3" />
                 {geofenceResult.distance}m from office
               </Badge>
@@ -419,159 +645,52 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
           </div>
 
           {/* Divider */}
-          <div className="w-full h-px bg-white/20"></div>
+          <div className="w-full h-px bg-gradient-to-r from-transparent via-blue-300 to-transparent"></div>
 
-          {/* Task Timer */}
-          <div className="text-center w-full">
-            <div className="text-sm opacity-80 mb-2">Task Timer</div>
-            <div className="text-4xl font-bold tabular-nums mb-4">{formatElapsedTime(elapsedTime, showSeconds)}</div>
+          {/* Shift Content */}
+          {renderShiftContent()}
 
-            {/* Work Progress Info */}
-            {startTime && elapsedTime < EIGHT_HOURS_IN_SECONDS && (
-              <div className="mb-4 p-2 bg-blue-500/20 border border-blue-500/30 rounded text-blue-200 text-xs">
-                <div className="font-semibold">
-                  Progress: {hoursWorked}h {minutesWorked}m / 8h
-                </div>
-                <div className="opacity-80">Remaining: {formatElapsedTime(remainingTime, false)}</div>
-              </div>
-            )}
-
-            {/* Status Indicators */}
-            <div className="flex justify-center gap-4 mb-4">
-              {isLate && (
-                <div className="flex items-center gap-1 text-red-300">
-                  <div className="w-2 h-2 rounded-full bg-red-400"></div>
-                  <span className="text-xs">Late</span>
-                </div>
-              )}
-              {isOvertime && (
-                <div className="flex items-center gap-1 text-green-300">
-                  <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                  <span className="text-xs">Overtime</span>
-                </div>
-              )}
-              {isGettingLocation && (
-                <div className="flex items-center gap-1 text-blue-300">
-                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-                  <span className="text-xs">Getting Location...</span>
-                </div>
-              )}
-              {isClockingOut && (
-                <div className="flex items-center gap-1 text-orange-300">
-                  <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></div>
-                  <span className="text-xs">Clocking Out...</span>
-                </div>
-              )}
-              {isTracking && !isClockingOut && (
-                <div className="flex items-center gap-1 text-green-300">
-                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                  <span className="text-xs">Active</span>
-                </div>
-              )}
-            </div>
-
-            {/* Error Messages with Dismiss Button */}
-            {clockInError && (
-              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-200 text-sm max-w-full break-words relative">
-                <button
-                  onClick={clearClockInError}
-                  className="absolute top-1 right-1 text-red-300 hover:text-red-100 transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-                <div className="font-semibold mb-1">Clock In Error:</div>
-                <div className="text-xs pr-6">{clockInError}</div>
-                <button onClick={clearClockInError} className="mt-2 text-xs text-red-300 hover:text-red-100 underline">
-                  Try Again
-                </button>
-              </div>
-            )}
-
-            {clockOutError && (
-              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-200 text-sm max-w-full break-words relative">
-                <button
-                  onClick={clearClockOutError}
-                  className="absolute top-1 right-1 text-red-300 hover:text-red-100 transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-                <div className="font-semibold mb-1">Clock Out Error:</div>
-                <div className="text-xs pr-6">{clockOutError}</div>
-                <button onClick={clearClockOutError} className="mt-2 text-xs text-red-300 hover:text-red-100 underline">
-                  Try Again
-                </button>
-              </div>
-            )}
-
-            {/* Control Buttons */}
-            <div className="flex justify-center gap-2">
-              {!isTracking ? (
-                <>
-                  {!startTime ? (
-                    <button
-                      onClick={handleClockIn}
-                      disabled={isClockInDisabled}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-500/80 hover:bg-green-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Play className="w-4 h-4" />
-                      <span className="text-sm">
-                        {isLoading ? (isGettingLocation ? "Getting Location..." : "Clocking In...") : "Clock In"}
-                      </span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleResume}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-500/80 hover:bg-green-500 rounded-lg transition-colors"
-                    >
-                      <Play className="w-4 h-4" />
-                      <span className="text-sm">Resume</span>
-                    </button>
-                  )}
-                </>
-              ) : (
-                <button
-                  onClick={handlePause}
-                  className="flex items-center gap-2 px-4 py-2 bg-yellow-500/80 hover:bg-yellow-500 rounded-lg transition-colors"
-                >
-                  <Pause className="w-4 h-4" />
-                  <span className="text-sm">Pause</span>
-                </button>
-              )}
-
+          {/* Error Messages with Dismiss Button */}
+          {clockInError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm max-w-full break-words relative">
               <button
-                onClick={handleStop}
-                className="flex items-center gap-2 px-4 py-2 bg-red-500/80 hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isStopDisabled}
+                onClick={clearClockInError}
+                className="absolute top-2 right-2 text-red-500 hover:text-red-700 transition-colors"
               >
-                <Square className="w-4 w-4" />
-                <span className="text-sm">{isClockingOut ? "Clocking Out..." : "Clock Out"}</span>
+                <X className="h-4 w-4" />
               </button>
-
-              {/* Refresh Button */}
+              <div className="font-semibold mb-1">Clock In Error:</div>
+              <div className="text-xs pr-6">{clockInError}</div>
               <button
-                onClick={handleRefresh}
-                disabled={isGettingLocation}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500/80 hover:bg-blue-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Refresh location and geofence status"
+                onClick={clearClockInError}
+                className="mt-2 text-xs text-red-600 hover:text-red-800 underline font-medium"
               >
-                <RefreshCw className={`w-4 h-4 ${isGettingLocation ? "animate-spin" : ""}`} />
-                <span className="text-sm">Refresh</span>
+                Try Again
               </button>
             </div>
+          )}
 
-            {/* Start Time Display */}
-            {startTime && (
-              <div className="mt-3 text-xs opacity-70">
-                Clocked in at: {formatTime(startTime)}
-                {isLate && <span className="text-red-300 ml-2">(Late)</span>}
-              </div>
-            )}
+          {clockOutError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm max-w-full break-words relative">
+              <button
+                onClick={clearClockOutError}
+                className="absolute top-2 right-2 text-red-500 hover:text-red-700 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="font-semibold mb-1">Clock Out Error:</div>
+              <div className="text-xs pr-6">{clockOutError}</div>
+              <button
+                onClick={clearClockOutError}
+                className="mt-2 text-xs text-red-600 hover:text-red-800 underline font-medium"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
 
-            {/* Timer State Info */}
-            {startTime && !isTracking && !isClockingOut && (
-              <div className="mt-2 text-xs opacity-70 text-yellow-300">Timer paused - Click Resume to continue</div>
-            )}
-          </div>
+          {/* Control Buttons */}
+          {renderControlButtons()}
         </div>
       </div>
 
