@@ -113,7 +113,7 @@ export function EmployeeTable({ onRefresh }: EmployeeTableProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Employee Management</CardTitle>
+          <CardTitle>Employee Attendence</CardTitle>
           <p className="text-sm text-slate-600">Loading employee data...</p>
         </CardHeader>
         <CardContent>
@@ -139,7 +139,7 @@ export function EmployeeTable({ onRefresh }: EmployeeTableProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Employee Management</CardTitle>
+          <CardTitle>Employee Attendance</CardTitle>
           <p className="text-sm text-red-600">Error: {error}</p>
         </CardHeader>
         <CardContent>
@@ -160,8 +160,8 @@ export function EmployeeTable({ onRefresh }: EmployeeTableProps) {
       <CardHeader>
         <div className="flex justify-between items-center">
           <div>
-            <CardTitle className="text-blue-700">Employee Management</CardTitle>
-            <p className="text-sm text-slate-600">Manage and monitor all employees</p>
+            <CardTitle className="text-blue-700">Employee Attendance</CardTitle>
+            <p className="text-sm text-slate-600">View Attendance all employees</p>
           </div>
           <div className="flex gap-2">
             <Button

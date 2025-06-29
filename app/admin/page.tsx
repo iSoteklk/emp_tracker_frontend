@@ -155,10 +155,8 @@ function AdminDashboardContent() {
           </Button>
         </div>
 
-        {/* Admin Location Display */}
-        <div className="mb-6">
-          <LocationDisplay showRefresh={true} />
-        </div>
+       
+       
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
@@ -198,19 +196,7 @@ function AdminDashboardContent() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white/80 border-blue-100">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <BarChart3 className="h-8 w-8 text-purple-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Total Hours Today</p>
-                  <p className="text-2xl font-bold text-slate-800">
-                    {Math.floor(summaryStats.totalHoursToday)}h {Math.round((summaryStats.totalHoursToday % 1) * 60)}m
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+    
         </div>
 
         {/* Employee Table Component */}
