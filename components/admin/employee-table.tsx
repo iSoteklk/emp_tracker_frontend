@@ -1,26 +1,21 @@
 "use client"
 
-import type React from "react"
-
 import { useEffect, useState } from "react"
+import { format } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Input } from "@/components/ui/input"
-import { RefreshCw, UserPlus, Calendar } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { CalendarIcon, Users, UserCheck, UserX } from "lucide-react"
 
-interface User {
-  _id: string
+interface Employee {
+  id: string
   email: string
   fname: string
   lname: string
   contact: string
   role: string
-  createdAt: string
-  updatedAt: string
+  isActive: boolean
 }
 
 interface AttendanceRecord {
@@ -30,19 +25,7 @@ interface AttendanceRecord {
   contact: string
   date: string
   clockInTime?: string
-  clockInLocation?: {
-    latitude: number
-    longitude: number
-    address: string
-    accuracy: number
-  }
   clockOutTime?: string
-  clockOutLocation?: {
-    latitude: number
-    longitude: number
-    address: string
-    accuracy: number
-  }
   totalHours?: string
   status: "clocked-in" | "clocked-out" | "absent"
   notes?: string
@@ -54,24 +37,29 @@ interface EmployeeTableProps {
 }
 
 export function EmployeeTable({ onRefresh, onAttendanceUpdate }: EmployeeTableProps) {
-  const [users, setUsers] = useState<User[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([])
+  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"))
   const [loading, setLoading] = useState(true)
   const [attendanceLoading, setAttendanceLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split("T")[0], // Today's date in YYYY-MM-DD format
-  )
-  const router = useRouter()
 
-  const fetchUsers = async () => {
+  useEffect(() => {
+    fetchEmployees()
+  }, [])
+
+  useEffect(() => {
+    if (selectedDate) {
+      fetchAttendanceData(selectedDate)
+    }
+  }, [selectedDate])
+
+  const fetchEmployees = async () => {
     try {
       setLoading(true)
-      setError(null)
-
       const token = localStorage.getItem("token")
+
       if (!token) {
-        setError("No authentication token found")
+        console.error("No authentication token found")
         return
       }
 
@@ -90,13 +78,10 @@ export function EmployeeTable({ onRefresh, onAttendanceUpdate }: EmployeeTablePr
       const data = await response.json()
 
       if (data.success === "true" && data.data) {
-        setUsers(data.data)
-      } else {
-        setError("Failed to fetch users")
+        setEmployees(data.data)
       }
     } catch (error) {
-      console.error("Error fetching users:", error)
-      setError("Failed to fetch users")
+      console.error("Error fetching employees:", error)
     } finally {
       setLoading(false)
     }
@@ -105,14 +90,13 @@ export function EmployeeTable({ onRefresh, onAttendanceUpdate }: EmployeeTablePr
   const fetchAttendanceData = async (date: string) => {
     try {
       setAttendanceLoading(true)
-
       const token = localStorage.getItem("token")
+
       if (!token) {
         console.error("No authentication token found")
         return
       }
 
-      // Using the internal API route
       const response = await fetch(`/api/attendance/${date}`, {
         method: "GET",
         headers: {
@@ -129,314 +113,243 @@ export function EmployeeTable({ onRefresh, onAttendanceUpdate }: EmployeeTablePr
 
       if (data.success === "true" && data.data) {
         setAttendanceData(data.data)
+
+        // Update parent component with statistics
+        const activeToday = data.data.filter(
+          (record: AttendanceRecord) => record.status === "clocked-in" || record.status === "clocked-out",
+        ).length
+
+        onAttendanceUpdate?.(employees.length, activeToday)
       } else {
         setAttendanceData([])
+        onAttendanceUpdate?.(employees.length, 0)
       }
     } catch (error) {
       console.error("Error fetching attendance data:", error)
       setAttendanceData([])
+      onAttendanceUpdate?.(employees.length, 0)
     } finally {
       setAttendanceLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchUsers()
-  }, [])
+  const getAttendanceStatus = (employee: Employee) => {
+    const attendance = attendanceData.find((record) => record.email === employee.email)
 
-  useEffect(() => {
-    if (selectedDate) {
-      fetchAttendanceData(selectedDate)
-    }
-  }, [selectedDate])
-
-  // Update parent component with attendance stats
-  useEffect(() => {
-    if (users.length > 0 && onAttendanceUpdate) {
-      const today = new Date().toISOString().split("T")[0]
-      if (selectedDate === today) {
-        const activeToday = attendanceData.filter(
-          (record) => record.status === "clocked-in" || record.status === "clocked-out",
-        ).length
-        onAttendanceUpdate(users.length, activeToday)
-      }
-    }
-  }, [users, attendanceData, selectedDate, onAttendanceUpdate])
-
-  const handleRefresh = () => {
-    fetchUsers()
-    if (selectedDate) {
-      fetchAttendanceData(selectedDate)
-    }
-    onRefresh?.()
-  }
-
-  const handleDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedDate(event.target.value)
-  }
-
-  const getAttendanceStatus = (userEmail: string) => {
-    const attendance = attendanceData.find((record) => record.email === userEmail)
-    return attendance?.status || "no-data"
-  }
-
-  const getAttendanceDetails = (userEmail: string) => {
-    return attendanceData.find((record) => record.email === userEmail)
-  }
-
-  const getAttendanceBadge = (status: string, attendance?: AttendanceRecord) => {
-    switch (status) {
-      case "clocked-in":
-        return (
-          <div className="flex flex-col gap-1">
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
-              Clocked In
-            </Badge>
-            {attendance?.clockInTime && (
-              <span className="text-xs text-slate-500">
-                {new Date(attendance.clockInTime).toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            )}
-          </div>
-        )
-      case "clocked-out":
-        return (
-          <div className="flex flex-col gap-1">
-            <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
-              Completed
-            </Badge>
-            {attendance?.totalHours && <span className="text-xs text-slate-500">{attendance.totalHours}</span>}
-          </div>
-        )
-      case "absent":
-        return (
-          <Badge variant="secondary" className="bg-red-100 text-red-800 border-red-200">
-            Absent
-          </Badge>
-        )
-      default:
-        return (
-          <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200">
+    if (!attendance) {
+      return {
+        status: "no-data",
+        badge: (
+          <Badge variant="secondary" className="bg-gray-100 text-gray-800 border-gray-200 text-xs">
             No Data
           </Badge>
-        )
+        ),
+        details: null,
+      }
     }
-  }
 
-  const getRoleBadge = (role: string) => {
-    switch (role.toLowerCase()) {
-      case "admin":
-        return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
-            Admin
-          </Badge>
-        )
-      case "employee":
-        return (
-          <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
-            Employee
-          </Badge>
-        )
+    switch (attendance.status) {
+      case "clocked-in":
+        return {
+          status: "clocked-in",
+          badge: (
+            <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+              Clocked In
+            </Badge>
+          ),
+          details: attendance.clockInTime ? (
+            <div className="text-xs text-slate-500 mt-1">
+              {new Date(attendance.clockInTime).toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </div>
+          ) : null,
+        }
+      case "clocked-out":
+        return {
+          status: "clocked-out",
+          badge: (
+            <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 text-xs">
+              Completed
+            </Badge>
+          ),
+          details: attendance.totalHours ? (
+            <div className="text-xs text-slate-500 mt-1">{attendance.totalHours}</div>
+          ) : null,
+        }
+      case "absent":
+        return {
+          status: "absent",
+          badge: (
+            <Badge variant="secondary" className="bg-red-100 text-red-800 border-red-200 text-xs">
+              Absent
+            </Badge>
+          ),
+          details: null,
+        }
       default:
-        return <Badge variant="outline">{role}</Badge>
+        return {
+          status: "no-data",
+          badge: (
+            <Badge variant="secondary" className="bg-gray-100 text-gray-800 border-gray-200 text-xs">
+              No Data
+            </Badge>
+          ),
+          details: null,
+        }
     }
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    })
   }
 
   const getFullName = (fname: string, lname: string) => {
-    return `${fname} ${lname}`.trim()
+    return `${fname || ""} ${lname || ""}`.trim() || "N/A"
   }
 
-  const formatSelectedDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
-  }
-
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Employee Attendance</CardTitle>
-          <p className="text-sm text-slate-600">Loading employee data...</p>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {[...Array(5)].map((_, index) => (
-              <div key={index} className="flex items-center space-x-4">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-4 w-48" />
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-20" />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Employee Attendance</CardTitle>
-          <p className="text-sm text-red-600">Error: {error}</p>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8">
-            <p className="text-slate-600 mb-4">Failed to load employee data</p>
-            <Button onClick={handleRefresh} variant="outline" className="flex items-center gap-2 bg-transparent">
-              <RefreshCw className="h-4 w-4" />
-              Try Again
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
+  const presentCount = attendanceData.filter(
+    (record) => record.status === "clocked-in" || record.status === "clocked-out",
+  ).length
+  const absentCount = attendanceData.filter((record) => record.status === "absent").length
 
   return (
-    <Card>
+    <Card className="bg-white/80 border-blue-100">
       <CardHeader>
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <CardTitle className="text-blue-700">Employee Attendance</CardTitle>
-            <p className="text-sm text-slate-600">View attendance for all employees</p>
-
-            {/* Date Picker Section */}
-            <div className="mt-4 flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-blue-600" />
-                <label htmlFor="attendance-date" className="text-sm font-medium text-slate-700">
-                  Select Date:
-                </label>
-              </div>
-              <Input
-                id="attendance-date"
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-xl font-semibold text-blue-700">Employee Attendance</CardTitle>
+            <p className="text-sm text-slate-600">Manage and view employee attendance records</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4 text-slate-500" />
+              <input
                 type="date"
                 value={selectedDate}
-                onChange={handleDateChange}
-                className="w-auto border-blue-200 focus:border-blue-400"
-                max={new Date().toISOString().split("T")[0]} // Prevent future dates
+                onChange={(e) => setSelectedDate(e.target.value)}
+                max={format(new Date(), "yyyy-MM-dd")}
+                className="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-              <div className="text-sm text-slate-600">
-                Showing attendance for <span className="font-medium">{formatSelectedDate(selectedDate)}</span>
-              </div>
             </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              onClick={handleRefresh}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 bg-transparent"
-              disabled={attendanceLoading}
-            >
-              <RefreshCw className={`h-4 w-4 ${attendanceLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            <Button
-              onClick={() => router.push("/admin/create-user")}
-              size="sm"
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-            >
-              <UserPlus className="h-4 w-4" />
-              Add Employee
-            </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <Users className="h-8 w-8 text-blue-600" />
+              <div className="ml-3">
+                <p className="text-sm font-medium text-blue-600">Total Employees</p>
+                <p className="text-2xl font-bold text-blue-800">{employees.length}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <UserCheck className="h-8 w-8 text-green-600" />
+              <div className="ml-3">
+                <p className="text-sm font-medium text-green-600">Present</p>
+                <p className="text-2xl font-bold text-green-800">{presentCount}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <UserX className="h-8 w-8 text-red-600" />
+              <div className="ml-3">
+                <p className="text-sm font-medium text-red-600">Absent</p>
+                <p className="text-2xl font-bold text-red-800">{absentCount}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Employee Table */}
+        <div className="rounded-md border border-slate-200">
           <Table>
             <TableHeader>
-              <TableRow className="border-blue-100">
-                <TableHead className="text-blue-700 font-semibold">Employee ID</TableHead>
-                <TableHead className="text-blue-700 font-semibold">Full Name</TableHead>
-                <TableHead className="text-blue-700 font-semibold">Email</TableHead>
-                <TableHead className="text-blue-700 font-semibold">Contact</TableHead>
-                <TableHead className="text-blue-700 font-semibold">Role</TableHead>
-                <TableHead className="text-blue-700 font-semibold">Attendance Status</TableHead>
-                <TableHead className="text-blue-700 font-semibold">Join Date</TableHead>
+              <TableRow className="bg-slate-50">
+                <TableHead className="font-semibold text-slate-700">Name</TableHead>
+                <TableHead className="font-semibold text-slate-700">Email</TableHead>
+                <TableHead className="font-semibold text-slate-700">Contact</TableHead>
+                <TableHead className="font-semibold text-slate-700">Role</TableHead>
+                <TableHead className="font-semibold text-slate-700">Status</TableHead>
+                <TableHead className="font-semibold text-slate-700">
+                  Attendance ({format(new Date(selectedDate), "MMM d, yyyy")})
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => {
-                const attendanceStatus = getAttendanceStatus(user.email)
-                const attendanceDetails = getAttendanceDetails(user.email)
-
-                return (
-                  <TableRow key={user._id} className="hover:bg-blue-50/50 border-blue-50">
-                    <TableCell className="font-medium text-slate-800">{user._id.slice(-8).toUpperCase()}</TableCell>
-                    <TableCell className="font-medium text-slate-800">{getFullName(user.fname, user.lname)}</TableCell>
-                    <TableCell className="text-slate-600">{user.email}</TableCell>
-                    <TableCell className="text-slate-600">{user.contact}</TableCell>
-                    <TableCell>{getRoleBadge(user.role)}</TableCell>
+              {loading ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <TableRow key={index}>
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-32" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-48" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-28" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-16" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-24" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : employees.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                    No employees found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                employees.map((employee) => {
+                  const attendanceStatus = getAttendanceStatus(employee)
+                  return (
+                    <TableRow key={employee.id} className="hover:bg-slate-50">
+                      <TableCell className="font-medium">{getFullName(employee.fname, employee.lname)}</TableCell>
+                      <TableCell className="text-slate-600">{employee.email}</TableCell>
+                      <TableCell className="text-slate-600">{employee.contact}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {employee.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={employee.isActive ? "default" : "secondary"}
+                          className={
+                            employee.isActive
+                              ? "bg-green-100 text-green-800 border-green-200"
+                              : "bg-red-100 text-red-800 border-red-200"
+                          }
+                        >
+                          {employee.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         {attendanceLoading ? (
                           <Skeleton className="h-6 w-20" />
                         ) : (
-                          getAttendanceBadge(attendanceStatus, attendanceDetails)
+                          <div>
+                            {attendanceStatus.badge}
+                            {attendanceStatus.details}
+                          </div>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-slate-600">{formatDate(user.createdAt)}</TableCell>
-                  </TableRow>
-                )
-              })}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
             </TableBody>
           </Table>
-        </div>
-
-        {users.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-slate-600 mb-4">No employees found</p>
-            <Button
-              onClick={() => router.push("/admin/create-user")}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-            >
-              <UserPlus className="h-4 w-4" />
-              Add First Employee
-            </Button>
-          </div>
-        )}
-
-        <div className="mt-4 text-sm text-slate-500 border-t border-blue-100 pt-4">
-          <div className="flex flex-wrap gap-4">
-            <span>Total Employees: {users.length}</span>
-            <span>Admins: {users.filter((u) => u.role.toLowerCase() === "admin").length}</span>
-            <span>Employees: {users.filter((u) => u.role.toLowerCase() === "employee").length}</span>
-            {attendanceData.length > 0 && (
-              <>
-                <span className="text-green-600">
-                  Present:{" "}
-                  {attendanceData.filter((a) => a.status === "clocked-out" || a.status === "clocked-in").length}
-                </span>
-                <span className="text-red-600">
-                  Absent: {attendanceData.filter((a) => a.status === "absent").length}
-                </span>
-              </>
-            )}
-          </div>
         </div>
       </CardContent>
     </Card>

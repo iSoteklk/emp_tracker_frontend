@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { format } from "date-fns"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { LocationDisplay } from "@/components/user-worklog/location-display"
 import { AuthGuard } from "@/components/auth-guard"
 import { EmployeeTable } from "@/components/admin/employee-table"
 import { FullScreenCalendar } from "@/components/ui/fullscreen-calendar"
@@ -20,6 +20,7 @@ function AdminDashboardContent() {
     lateEmployees: 0,
     totalHoursToday: 0,
   })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const userData = localStorage.getItem("user")
@@ -33,9 +34,71 @@ function AdminDashboardContent() {
       }
     }
 
+    // Fetch initial data
+    fetchDashboardStats()
+
     // Dispatch auth change event to ensure sidebar updates
     window.dispatchEvent(new Event("auth-change"))
   }, [router])
+
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem("token")
+
+      if (!token) {
+        console.error("No authentication token found")
+        return
+      }
+
+      // Fetch total employees
+      const employeesResponse = await fetch("/api/user/getall", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      let totalEmployees = 0
+      if (employeesResponse.ok) {
+        const employeesData = await employeesResponse.json()
+        if (employeesData.success === "true" && employeesData.data) {
+          totalEmployees = employeesData.data.length
+        }
+      }
+
+      // Fetch today's attendance
+      const today = format(new Date(), "yyyy-MM-dd")
+      const attendanceResponse = await fetch(`/api/attendance/${today}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      let activeToday = 0
+      if (attendanceResponse.ok) {
+        const attendanceData = await attendanceResponse.json()
+        if (attendanceData.success === "true" && attendanceData.data) {
+          activeToday = attendanceData.data.filter(
+            (record: any) => record.status === "clocked-in" || record.status === "clocked-out",
+          ).length
+        }
+      }
+
+      setSummaryStats((prev) => ({
+        ...prev,
+        totalEmployees,
+        activeEmployees: activeToday,
+      }))
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem("token")
@@ -50,9 +113,16 @@ function AdminDashboardContent() {
     router.push("/login")
   }
 
+  const handleAttendanceUpdate = (totalEmployees: number, activeToday: number) => {
+    setSummaryStats((prev) => ({
+      ...prev,
+      totalEmployees,
+      activeEmployees: activeToday,
+    }))
+  }
+
   const handleRefreshStats = () => {
-    // This function can be called when employee data is refreshed
-    // You can implement additional stats fetching logic here
+    fetchDashboardStats()
     console.log("Refreshing admin stats...")
   }
 
@@ -155,9 +225,6 @@ function AdminDashboardContent() {
           </Button>
         </div>
 
-       
-       
-
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <Card className="bg-white/80 border-blue-100">
@@ -166,7 +233,13 @@ function AdminDashboardContent() {
                 <Users className="h-8 w-8 text-blue-600" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-slate-600">Total Employees</p>
-                  <p className="text-2xl font-bold text-slate-800">{summaryStats.totalEmployees}</p>
+                  <p className="text-2xl font-bold text-slate-800">
+                    {loading ? (
+                      <div className="animate-pulse bg-slate-200 h-8 w-12 rounded"></div>
+                    ) : (
+                      summaryStats.totalEmployees
+                    )}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -178,7 +251,13 @@ function AdminDashboardContent() {
                 <Clock className="h-8 w-8 text-green-600" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-slate-600">Active Today</p>
-                  <p className="text-2xl font-bold text-slate-800">{summaryStats.activeEmployees}</p>
+                  <p className="text-2xl font-bold text-slate-800">
+                    {loading ? (
+                      <div className="animate-pulse bg-slate-200 h-8 w-12 rounded"></div>
+                    ) : (
+                      summaryStats.activeEmployees
+                    )}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -196,12 +275,22 @@ function AdminDashboardContent() {
             </CardContent>
           </Card>
 
-    
+          <Card className="bg-white/80 border-blue-100">
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <BarChart3 className="h-8 w-8 text-purple-600" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-slate-600">Total Hours Today</p>
+                  <p className="text-2xl font-bold text-slate-800">{summaryStats.totalHoursToday}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Employee Table Component */}
         <div className="mb-6">
-          <EmployeeTable onRefresh={handleRefreshStats} />
+          <EmployeeTable onRefresh={handleRefreshStats} onAttendanceUpdate={handleAttendanceUpdate} />
         </div>
 
         {/* Employee Schedule Calendar */}
@@ -209,10 +298,15 @@ function AdminDashboardContent() {
           <CardContent className="p-6">
             <div className="mb-4">
               <h3 className="text-xl font-semibold text-blue-700">Employee Schedule Calendar</h3>
-              <p className="text-sm text-slate-600">View employee attendance, meetings, and important events</p>
+              <p className="text-sm text-slate-600">Click on any date to view employee attendance details</p>
             </div>
             <div className="h-[600px]">
-              <FullScreenCalendar data={employeeScheduleData} />
+              <FullScreenCalendar
+                data={employeeScheduleData}
+                onDateClick={(date) => {
+                  console.log("Date clicked:", date)
+                }}
+              />
             </div>
           </CardContent>
         </Card>
