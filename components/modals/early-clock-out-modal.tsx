@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { AlertTriangle, X, Clock } from "lucide-react"
+import { getWorkConfigSync } from "@/lib/work-config"
 
 interface EarlyClockOutModalProps {
   isOpen: boolean
@@ -21,13 +22,16 @@ export function EarlyClockOutModal({
 }: EarlyClockOutModalProps) {
   if (!isOpen) return null
 
+  // Get work configuration
+  const workConfig = getWorkConfigSync()
+  const FULL_WORK_HOURS_IN_SECONDS = workConfig.fullWorkingHours * 60 * 60
+
   // Calculate hours and minutes worked
   const hoursWorked = Math.floor(elapsedTime / 3600)
   const minutesWorked = Math.floor((elapsedTime % 3600) / 60)
 
-  // Calculate remaining time to complete 8 hours
-  const EIGHT_HOURS_IN_SECONDS = 8 * 60 * 60
-  const remainingTime = Math.max(0, EIGHT_HOURS_IN_SECONDS - elapsedTime)
+  // Calculate remaining time to complete full work hours
+  const remainingTime = Math.max(0, FULL_WORK_HOURS_IN_SECONDS - elapsedTime)
   const remainingHours = Math.floor(remainingTime / 3600)
   const remainingMinutes = Math.floor((remainingTime % 3600) / 60)
 
@@ -61,13 +65,26 @@ export function EarlyClockOutModal({
               </div>
               <div className="flex justify-between">
                 <span className="text-orange-700">Required Hours:</span>
-                <span className="font-medium text-orange-900">8h 0m</span>
+                <span className="font-medium text-orange-900">{workConfig.fullWorkingHours}h 0m</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-orange-700">Remaining Time:</span>
                 <span className="font-medium text-red-600">
                   {remainingHours}h {remainingMinutes}m
                 </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Work Schedule Info */}
+          <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+            <div className="text-sm text-blue-800">
+              <div className="font-medium mb-1">Today's Schedule:</div>
+              <div className="text-xs space-y-1">
+                <div>Start Time: {workConfig.standardStartTime}</div>
+                <div>End Time: {workConfig.standardEndTime}</div>
+                <div>Working Hours: {workConfig.fullWorkingHours} hours</div>
+                <div>Lunch Break: {workConfig.lunchBreakDuration} minutes</div>
               </div>
             </div>
           </div>

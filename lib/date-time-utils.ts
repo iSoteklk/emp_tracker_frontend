@@ -1,4 +1,5 @@
 // Date and time utility functions for the time tracking application
+import { workTimeConfig } from "./work-config"
 
 /**
  * Formats a date object to a readable string
@@ -20,13 +21,14 @@ export function formatDate(date: Date, options?: { includeWeekday?: boolean }): 
  * Formats a date object to time string
  */
 export function formatTime(date: Date, options?: { showSeconds?: boolean }): string {
-  const { showSeconds = true } = options || {}
+  const config = workTimeConfig.getConfigSync()
+  const { showSeconds = config.showSeconds } = options || {}
 
   const formatter = new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     second: showSeconds ? "2-digit" : undefined,
-    hour12: true,
+    hour12: !config.use24HourFormat,
   })
 
   return formatter.format(date)
@@ -80,28 +82,24 @@ export function calculateTimeDifference(startTime: Date): {
 }
 
 /**
- * Checks if a given time is considered late (after 9:00 AM)
+ * Checks if a given time is considered late based on work configuration
  */
 export function isLateTime(time: Date): boolean {
-  const hour = time.getHours()
-  const minute = time.getMinutes()
-
-  // Consider late if after 9:00 AM
-  return hour > 9 || (hour === 9 && minute > 0)
+  return workTimeConfig.isLate(time)
 }
 
 /**
- * Checks if worked hours qualify as overtime (more than 8 hours)
+ * Checks if worked hours qualify as overtime based on work configuration
  */
 export function isOvertimeHours(hours: number): boolean {
-  return hours > 8
+  return workTimeConfig.isOvertime(hours)
 }
 
 /**
- * Gets the working hours text for display
+ * Gets the working hours text for display from work configuration
  */
 export function getWorkingHoursText(): string {
-  return "9:00 AM - 5:00 PM"
+  return workTimeConfig.getWorkingHoursText()
 }
 
 /**
@@ -153,4 +151,50 @@ export function getEndOfDay(date: Date): Date {
   const endOfDay = new Date(date)
   endOfDay.setHours(23, 59, 59, 999)
   return endOfDay
+}
+
+/**
+ * Checks if a date is a weekend based on work configuration
+ */
+export function isWeekend(date: Date): boolean {
+  return workTimeConfig.isWeekend(date)
+}
+
+/**
+ * Gets the standard start time from work configuration
+ */
+export function getStandardStartTime(): string {
+  const config = workTimeConfig.getConfigSync()
+  return config.standardStartTime
+}
+
+/**
+ * Gets the standard end time from work configuration
+ */
+export function getStandardEndTime(): string {
+  const config = workTimeConfig.getConfigSync()
+  return config.standardEndTime
+}
+
+/**
+ * Gets the full working hours from work configuration
+ */
+export function getFullWorkingHours(): number {
+  const config = workTimeConfig.getConfigSync()
+  return config.fullWorkingHours
+}
+
+/**
+ * Gets the late threshold in minutes from work configuration
+ */
+export function getLateThresholdMinutes(): number {
+  const config = workTimeConfig.getConfigSync()
+  return config.lateThresholdMinutes
+}
+
+/**
+ * Calculates expected end time based on start time and work configuration
+ */
+export function calculateExpectedEndTime(startTime: Date): Date {
+  return workTimeConfig.calculateExpectedEndTime(startTime)
 }

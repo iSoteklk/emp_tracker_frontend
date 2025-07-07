@@ -45,24 +45,14 @@ const adminNavigationItems = [
     icon: UserPlus,
   },
   {
+    title: "Work Configuration",
+    url: "/admin/work-config",
+    icon: Settings,
+  },
+  {
     title: "Employee Management",
     url: "/admin/employees",
     icon: Users,
-  },
-  {
-    title: "Time Reports",
-    url: "/admin/reports",
-    icon: BarChart3,
-  },
-  {
-    title: "Work Stations",
-    url: "/admin/stations",
-    icon: MapPin,
-  },
-  {
-    title: "System Settings",
-    url: "/admin/settings",
-    icon: Settings,
   },
 ]
 

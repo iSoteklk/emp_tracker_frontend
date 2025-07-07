@@ -15,9 +15,9 @@ import {
   calculateTimeDifference,
   isLateTime,
   isOvertimeHours,
-  getWorkingHoursText,
   getTodayDateString,
 } from "@/lib/date-time-utils"
+import { getWorkConfig, getWorkConfigSync, workTimeConfig } from "@/lib/work-config"
 
 interface GlassTimeCardProps {
   showSeconds?: boolean
@@ -77,6 +77,9 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   const [shiftData, setShiftData] = useState<ShiftData | null>(null)
   const [isLoadingShiftStatus, setIsLoadingShiftStatus] = useState(true)
 
+  // Work configuration state
+  const [workConfig, setWorkConfig] = useState(getWorkConfigSync())
+
   // Use the location hook
   const {
     location,
@@ -97,6 +100,23 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     fetchAddress: true,
     autoRefreshOnClockIn: true,
   })
+
+  // Load work configuration on mount
+  useEffect(() => {
+    const loadWorkConfig = async () => {
+      try {
+        const config = await getWorkConfig()
+        setWorkConfig(config)
+        console.log("Work configuration loaded:", config)
+      } catch (error) {
+        console.error("Failed to load work configuration:", error)
+        // Use sync version as fallback
+        setWorkConfig(getWorkConfigSync())
+      }
+    }
+
+    loadWorkConfig()
+  }, [])
 
   // Fetch shift status on component mount
   useEffect(() => {
@@ -262,10 +282,10 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   }
 
   const handleClockOut = async () => {
-    // Check if user has worked less than 8 hours (28,800 seconds)
-    const EIGHT_HOURS_IN_SECONDS = 8 * 60 * 60 // 28,800 seconds
+    // Use dynamic work configuration for early clock out check
+    const FULL_WORK_HOURS_IN_SECONDS = workConfig.fullWorkingHours * 60 * 60
 
-    if (elapsedTime < EIGHT_HOURS_IN_SECONDS) {
+    if (elapsedTime < FULL_WORK_HOURS_IN_SECONDS) {
       setShowEarlyClockOutModal(true)
       return
     }
@@ -412,16 +432,17 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     setClockOutError("")
   }
 
-  // Use utility functions for calculations
-  const isLate = startTime && isLateTime(startTime)
+  // Use dynamic configuration for calculations
+  const isLate = startTime ? workTimeConfig.isLate(startTime) : false
+
   const workedHours = elapsedTime / 3600
-  const isOvertime = isOvertimeHours(workedHours)
+  const isOvertime = workTimeConfig.isOvertime(workedHours)
 
   const isLoading = isClockingIn || isClockingOut || isGettingLocation || isLoadingShiftStatus
 
-  // Calculate remaining time to complete 8 hours
-  const EIGHT_HOURS_IN_SECONDS = 8 * 60 * 60
-  const remainingTime = Math.max(0, EIGHT_HOURS_IN_SECONDS - elapsedTime)
+  // Calculate remaining time to complete full work hours
+  const FULL_WORK_HOURS_IN_SECONDS = workConfig.fullWorkingHours * 60 * 60
+  const remainingTime = Math.max(0, FULL_WORK_HOURS_IN_SECONDS - elapsedTime)
   const hoursWorked = Math.floor(elapsedTime / 3600)
   const minutesWorked = Math.floor((elapsedTime % 3600) / 60)
 
@@ -462,11 +483,11 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
             {formatElapsedTime(elapsedTime, showSeconds)}
           </div>
 
-          {/* Work Progress Info */}
-          {elapsedTime < EIGHT_HOURS_IN_SECONDS && (
+          {/* Work Progress Info - Updated to use dynamic config */}
+          {elapsedTime < FULL_WORK_HOURS_IN_SECONDS && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
               <div className="font-semibold">
-                Progress: {hoursWorked}h {minutesWorked}m / 8h
+                Progress: {hoursWorked}h {minutesWorked}m / {workConfig.fullWorkingHours}h
               </div>
               <div className="text-blue-600">Remaining: {formatElapsedTime(remainingTime, false)}</div>
             </div>
@@ -615,9 +636,11 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
             {showTimezone && <div className="text-xs text-slate-500">{formatTimezone()}</div>}
           </div>
 
-          {/* Work Schedule Info */}
+          {/* Work Schedule Info - Updated to use dynamic config */}
           <div className="text-center text-xs text-slate-600 bg-white/50 px-3 py-1 rounded-full">
-            <div>Work Hours: {getWorkingHoursText()}</div>
+            <div>
+              Work Hours: {workConfig.standardStartTime} - {workConfig.standardEndTime} ({workConfig.fullWorkingHours}h)
+            </div>
           </div>
 
           {/* Location Status Indicators */}
