@@ -13,8 +13,8 @@ export interface WorkStationLocation {
   
   // Default main office configuration
   export const DEFAULT_MAIN_OFFICE: WorkStationLocation = {
-    latitude: 6.9299801558164775,
-    longitude: 79.86128738655835,
+    latitude: 6.849861302435484,
+    longitude: 79.9199657324486,
     radius: 30,
     address: "Main Office Building, Colombo",
     name: "Main Office",
