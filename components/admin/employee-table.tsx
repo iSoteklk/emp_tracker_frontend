@@ -310,7 +310,9 @@ export function EmployeeTable({ onRefresh, onAttendanceUpdate }: EmployeeTablePr
                   </TableCell>
                 </TableRow>
               ) : (
-                employees.map((employee) => {
+                employees
+                  .filter((employee) => employee.role !== "admin" && employee.role !== "super admin")
+                  .map((employee) => {
                   const attendanceStatus = getAttendanceStatus(employee)
                   return (
                     <TableRow key={employee.id} className="hover:bg-slate-50">
