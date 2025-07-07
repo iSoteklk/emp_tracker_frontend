@@ -88,7 +88,7 @@ export default function WorkConfigPage() {
   const fetchCurrentConfig = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch("http://localhost:4000/api/v1/public/work-time/config/active")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/public/work-time/config/active`)
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.data) {
@@ -126,7 +126,7 @@ export default function WorkConfigPage() {
         throw new Error("No authentication token found")
       }
 
-      const response = await fetch("http://localhost:4000/api/v1/work-time/config", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/work-time/config`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

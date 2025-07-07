@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Forward the request to your external API
-    const externalApiUrl = `http://localhost:4000/api/v1/shift/attendance/${date}`
+    const externalApiUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/shift/attendance/${date}`
 
     const response = await fetch(externalApiUrl, {
       method: "GET",

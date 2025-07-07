@@ -7,16 +7,7 @@ import { LocationPermissionModal } from "@/components/modals/location-permission
 import { GeofenceModal } from "@/components/modals/geofence-modal"
 import { ClockOutGeofenceModal } from "@/components/modals/clock-out-geofence-modal"
 import { EarlyClockOutModal } from "@/components/modals/early-clock-out-modal"
-import {
-  formatElapsedTime,
-  formatTime,
-  formatDate,
-  formatTimezone,
-  calculateTimeDifference,
-  isLateTime,
-  isOvertimeHours,
-  getTodayDateString,
-} from "@/lib/date-time-utils"
+import { formatElapsedTime, formatTime, formatDate, formatTimezone, getTodayDateString } from "@/lib/date-time-utils"
 import { getWorkConfig, getWorkConfigSync, workTimeConfig } from "@/lib/work-config"
 
 interface GlassTimeCardProps {
@@ -80,6 +71,9 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   // Work configuration state
   const [workConfig, setWorkConfig] = useState(getWorkConfigSync())
 
+  // Auto-refresh interval for syncing across devices
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<NodeJS.Timeout | null>(null)
+
   // Use the location hook
   const {
     location,
@@ -118,38 +112,59 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     loadWorkConfig()
   }, [])
 
-  // Fetch shift status on component mount
+  // Fetch shift status on component mount and set up auto-refresh
   useEffect(() => {
     fetchShiftStatus()
+
+    // Set up auto-refresh every 30 seconds to sync across devices
+    const interval = setInterval(() => {
+      fetchShiftStatus()
+    }, 30000) // 30 seconds
+
+    setAutoRefreshInterval(interval)
+
+    // Cleanup on unmount
+    return () => {
+      if (interval) {
+        clearInterval(interval)
+      }
+    }
   }, [])
 
-  // Load saved timer state on mount (only if clocked in)
+  // Update timer state based on shift data
   useEffect(() => {
-    if (shiftStatus === "clocked-in" && shiftData) {
-      // Calculate elapsed time from clock in time
-      const clockInTime = new Date(shiftData.clockInTime!)
+    if (shiftStatus === "clocked-in" && shiftData && shiftData.clockInTime) {
+      const clockInTime = new Date(shiftData.clockInTime)
       const now = new Date()
       const elapsed = Math.floor((now.getTime() - clockInTime.getTime()) / 1000)
+
+      console.log("Setting up timer for clocked-in shift:", {
+        clockInTime: clockInTime.toISOString(),
+        elapsed,
+        shiftId: shiftData._id,
+      })
 
       setIsTracking(true)
       setStartTime(clockInTime)
       setElapsedTime(elapsed)
     } else {
-      // Clear any saved timer state if not clocked in
+      // Clear timer state if not clocked in
+      console.log("Clearing timer state - shift status:", shiftStatus)
       setIsTracking(false)
       setStartTime(null)
       setElapsedTime(0)
-      localStorage.removeItem("timerState")
     }
   }, [shiftStatus, shiftData])
 
+  // Timer update effect
   useEffect(() => {
     const intervalId = setInterval(() => {
       setCurrentTime(new Date())
 
       if (isTracking && startTime) {
-        const timeDiff = calculateTimeDifference(startTime)
-        setElapsedTime(timeDiff.totalSeconds)
+        const now = new Date()
+        const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000)
+        setElapsedTime(elapsed)
       }
     }, 1000)
 
@@ -157,7 +172,6 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   }, [isTracking, startTime])
 
   const fetchShiftStatus = async () => {
-    setIsLoadingShiftStatus(true)
     try {
       const token = localStorage.getItem("token")
       if (!token) {
@@ -170,7 +184,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       const todayDate = getTodayDateString()
       console.log("Fetching shift status for date:", todayDate)
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/shift/me/date/${todayDate}`, {
+      const response = await fetch(`/api/shift/status?date=${todayDate}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -184,10 +198,20 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       if (response.ok && data.success === "true") {
         if (data.data && data.data.length > 0) {
           const shift = data.data[0]
+          console.log("Current shift data:", shift)
           setShiftData(shift)
-          setShiftStatus(shift.status === "clocked-in" ? "clocked-in" : "clocked-out")
+
+          // Determine status based on clockOutTime
+          if (shift.clockOutTime) {
+            setShiftStatus("clocked-out")
+          } else if (shift.clockInTime) {
+            setShiftStatus("clocked-in")
+          } else {
+            setShiftStatus("no-shift")
+          }
         } else {
           // Empty data array means no shift for today
+          console.log("No shift found for today")
           setShiftStatus("no-shift")
           setShiftData(null)
         }
@@ -217,6 +241,12 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   }
 
   const handleClockIn = async () => {
+    // Check if already clocked in
+    if (shiftStatus === "clocked-in") {
+      setClockInError("You are already clocked in. Please refresh to see current status.")
+      return
+    }
+
     setIsClockingIn(true)
     setClockInError("")
     clearError()
@@ -229,7 +259,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       const token = localStorage.getItem("token")
       if (!token) {
         setClockInError("Please login first")
-        setIsClockingIn(false) // Reset button state
+        setIsClockingIn(false)
         return
       }
 
@@ -238,6 +268,8 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         geofence: geofenceResult,
         notes: clockInNotes,
       }
+
+      console.log("Sending clock-in request:", requestBody)
 
       const response = await fetch("/api/shift/clock-in", {
         method: "POST",
@@ -249,23 +281,28 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       })
 
       const data = await response.json()
+      console.log("Clock-in response:", data)
 
       if (response.ok && data.success === "true") {
-        // Successfully clocked in - refresh shift status
+        // Successfully clocked in - refresh shift status immediately
         await fetchShiftStatus()
         setClockInError("")
-        setIsClockingIn(false) // Reset button state
+        setIsClockingIn(false)
 
-        // Show success message briefly
-        setTimeout(() => {
-          // You could add a success toast here if needed
-        }, 1000)
+        console.log("Clock-in successful, status updated")
       } else {
-        setClockInError(data.message || data.error || `Server error: ${response.status}`)
-        setIsClockingIn(false) // Reset button state
+        // Handle specific error cases
+        if (data.message && data.message.includes("already clocked in")) {
+          setClockInError("You are already clocked in today. Refreshing status...")
+          await fetchShiftStatus()
+        } else {
+          setClockInError(data.message || data.error || `Server error: ${response.status}`)
+        }
+        setIsClockingIn(false)
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      console.error("Clock-in error:", error)
 
       // Reset button state first
       setIsClockingIn(false)
@@ -282,6 +319,12 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   }
 
   const handleClockOut = async () => {
+    // Check if not clocked in
+    if (shiftStatus !== "clocked-in") {
+      setClockOutError("You are not currently clocked in. Please refresh to see current status.")
+      return
+    }
+
     // Use dynamic work configuration for early clock out check
     const FULL_WORK_HOURS_IN_SECONDS = workConfig.fullWorkingHours * 60 * 60
 
@@ -324,6 +367,8 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         notes: clockOutNotes,
       }
 
+      console.log("Sending clock-out request:", requestBody)
+
       const response = await fetch("/api/shift/clock-out", {
         method: "POST",
         headers: {
@@ -334,26 +379,28 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       })
 
       const data = await response.json()
+      console.log("Clock-out response:", data)
 
       if (response.ok && data.success === "true") {
-        // Successfully clocked out - refresh shift status
+        // Successfully clocked out - refresh shift status immediately
         await fetchShiftStatus()
         setClockOutError("")
         setIsClockingOut(false)
 
-        // Clear saved timer state
-        localStorage.removeItem("timerState")
-
-        // Show success message briefly
-        setTimeout(() => {
-          // You could add a success toast here if needed
-        }, 1000)
+        console.log("Clock-out successful, status updated")
       } else {
-        setClockOutError(data.message || data.error || `Server error: ${response.status}`)
+        // Handle specific error cases
+        if (data.message && data.message.includes("not clocked in")) {
+          setClockOutError("You are not currently clocked in. Refreshing status...")
+          await fetchShiftStatus()
+        } else {
+          setClockOutError(data.message || data.error || `Server error: ${response.status}`)
+        }
         setIsClockingOut(false)
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      console.error("Clock-out error:", error)
 
       // Reset button state first
       setIsClockingOut(false)
@@ -377,32 +424,35 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   }
 
   const handleRefresh = async () => {
+    console.log("Manual refresh triggered")
+    setIsLoadingShiftStatus(true)
     try {
       await refreshLocation()
       await fetchShiftStatus()
     } catch (error) {
       console.error("Failed to refresh:", error)
+    } finally {
+      setIsLoadingShiftStatus(false)
     }
   }
 
   const handleCloseLocationModal = () => {
     setShowLocationModal(false)
-    resetClockInState() // Reset all states
+    resetClockInState()
   }
 
   const handleCloseGeofenceModal = () => {
     setShowGeofenceModal(false)
-    resetClockInState() // Reset all states
+    resetClockInState()
   }
 
   const handleCloseClockOutGeofenceModal = () => {
     setShowClockOutGeofenceModal(false)
-    resetClockOutState() // Reset all states
+    resetClockOutState()
   }
 
   const handleRetryFromLocationModal = async () => {
     setShowLocationModal(false)
-    // Small delay to allow modal to close
     setTimeout(() => {
       handleClockIn()
     }, 100)
@@ -410,7 +460,6 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
 
   const handleRetryFromGeofenceModal = async () => {
     setShowGeofenceModal(false)
-    // Small delay to allow modal to close
     setTimeout(() => {
       handleClockIn()
     }, 100)
@@ -418,7 +467,6 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
 
   const handleRetryFromClockOutGeofenceModal = async () => {
     setShowClockOutGeofenceModal(false)
-    // Small delay to allow modal to close
     setTimeout(() => {
       performClockOut()
     }, 100)
@@ -483,7 +531,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
             {formatElapsedTime(elapsedTime, showSeconds)}
           </div>
 
-          {/* Work Progress Info - Updated to use dynamic config */}
+          {/* Work Progress Info */}
           {elapsedTime < FULL_WORK_HOURS_IN_SECONDS && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
               <div className="font-semibold">
@@ -532,6 +580,9 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
               {isLate && <span className="text-red-600 ml-2 font-medium">(Late)</span>}
             </div>
           )}
+
+          {/* Sync Status */}
+          <div className="mt-2 text-xs text-slate-500">Last synced: {new Date().toLocaleTimeString()}</div>
         </div>
       )
     }
@@ -552,7 +603,6 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   // Render control buttons based on shift status
   const renderControlButtons = () => {
     if (shiftStatus === "clocked-out") {
-      // Only show refresh button when shift is completed
       return (
         <div className="flex justify-center gap-3">
           <button
@@ -569,7 +619,6 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     }
 
     if (shiftStatus === "clocked-in") {
-      // Only show clock out and refresh buttons when clocked in
       return (
         <div className="flex justify-center gap-3">
           <button
@@ -594,7 +643,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       )
     }
 
-    // Default case: no shift (show clock in and refresh buttons)
+    // Default case: no shift
     return (
       <div className="flex justify-center gap-3">
         <button
@@ -636,7 +685,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
             {showTimezone && <div className="text-xs text-slate-500">{formatTimezone()}</div>}
           </div>
 
-          {/* Work Schedule Info - Updated to use dynamic config */}
+          {/* Work Schedule Info */}
           <div className="text-center text-xs text-slate-600 bg-white/50 px-3 py-1 rounded-full">
             <div>
               Work Hours: {workConfig.standardStartTime} - {workConfig.standardEndTime} ({workConfig.fullWorkingHours}h)

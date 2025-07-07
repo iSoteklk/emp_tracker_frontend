@@ -106,7 +106,7 @@ export class WorkTimeConfigManager {
       this.isLoading = true
       console.log("Fetching work time configuration from API...")
 
-      const response = await fetch("http://localhost:4000/api/v1/public/work-time/config/active", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/public/work-time/config/active`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
