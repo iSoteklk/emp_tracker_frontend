@@ -50,6 +50,11 @@ const adminNavigationItems = [
     icon: Settings,
   },
   {
+    title: "Work Locations",
+    url: "/admin/work-locations",
+    icon: MapPin,
+  },
+  {
     title: "Employee Management",
     url: "/admin/employees",
     icon: Users,
