@@ -147,7 +147,7 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
         const dateStr = format(date, 'yyyy-MM-dd')
         
         try {
-          const response = await fetch(`http://localhost:4000/api/v1/shift/me/date/${dateStr}`, {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/shift/me/date/${dateStr}`, {
             method: "GET",
             headers: {
               "Content-Type": "application/json",
@@ -417,7 +417,7 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col space-y-4 md:flex-row md:justify-between md:items-center md:space-y-0">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
@@ -429,12 +429,15 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
                 {getDateRangeTitle()}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            
+            <div className="flex flex-col space-y-3 md:space-y-0 md:flex-row md:items-center md:gap-2">
+              {/* Navigation buttons row */}
               <div className="flex items-center gap-1">
                 <Button 
                   onClick={navigateToToday}
                   variant={selectedPeriod === "today" ? "default" : "outline"}
                   size="sm"
+                  className="flex-1 md:flex-initial"
                 >
                   Today
                 </Button>
@@ -442,33 +445,41 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
                   onClick={navigateToYesterday}
                   variant={selectedPeriod === "yesterday" ? "default" : "outline"}
                   size="sm"
+                  className="flex-1 md:flex-initial"
                 >
                   Yesterday
                 </Button>
               </div>
-              <Select onValueChange={handlePeriodChange} value={selectedPeriod}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Select a period" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_PERIOD_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button 
-                onClick={() => fetchWorkLogData(dateRange)}
-                variant="outline"
-                size="sm"
-                disabled={isLoading}
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
+              
+              {/* Controls row */}
+              <div className="flex items-center gap-2">
+                <Select onValueChange={handlePeriodChange} value={selectedPeriod}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Select a period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIME_PERIOD_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button 
+                  onClick={() => fetchWorkLogData(dateRange)}
+                  variant="outline"
+                  size="sm"
+                  disabled={isLoading}
+                  className="shrink-0"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''} md:mr-2`} />
+                  <span className="hidden md:inline">Refresh</span>
+                </Button>
+              </div>
+              
+              {/* Total hours display */}
               {workLogData.length > 0 && (
-                <div className="text-right">
+                <div className="text-center md:text-right border-t pt-3 md:border-t-0 md:pt-0">
                   <div className="text-sm text-muted-foreground">Total Hours</div>
                   <div className="text-xl font-bold">
                     {Math.floor(totalWeeklyHours)}h {Math.round((totalWeeklyHours % 1) * 60)}m
