@@ -24,6 +24,7 @@ import {
   X
 } from "lucide-react"
 import { AuthGuard } from "@/components/auth-guard"
+import { refreshWorkStationConfig } from "@/lib/work-station-config"
 
 interface WorkLocation {
   _id?: string
@@ -97,7 +98,7 @@ function WorkLocationsContent() {
         throw new Error("No authentication token found")
       }
 
-      const response = await fetch("http://localhost:4000/api/v1/locations/getall", {
+      const response = await fetch("/api/work-locations/getall", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -130,9 +131,21 @@ function WorkLocationsContent() {
     if (message) setMessage(null)
   }
 
+  const handleNameInputChange = (value: string) => {
+    // Filter out invalid characters in real-time
+    const filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '')
+    handleInputChange("name", filteredValue)
+  }
+
   const validateForm = (): string | null => {
     if (!formData.name.trim()) {
       return "Location name is required"
+    }
+
+    // Validate location name - only allow letters, numbers, underscores, and hyphens
+    const nameRegex = /^[a-zA-Z0-9_-]+$/
+    if (!nameRegex.test(formData.name.trim())) {
+      return "Location name can only contain letters, numbers, underscores (_), and hyphens (-). No spaces or special characters allowed."
     }
 
     if (!formData.address.trim()) {
@@ -186,7 +199,7 @@ function WorkLocationsContent() {
 
       console.log("Creating work location:", requestBody)
 
-      const response = await fetch("http://localhost:4000/api/v1/locations/create", {
+      const response = await fetch("/api/work-locations/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -205,6 +218,14 @@ function WorkLocationsContent() {
         
         // Refresh locations list
         fetchLocations()
+
+        // Refresh work station configuration to update geofencing
+        try {
+          console.log("Refreshing work station configuration after location creation")
+          await refreshWorkStationConfig()
+        } catch (error) {
+          console.error("Failed to refresh work station config:", error)
+        }
       } else {
         throw new Error(data.message || "Failed to create work location")
       }
@@ -272,6 +293,12 @@ function WorkLocationsContent() {
     if (message) setMessage(null)
   }
 
+  const handleEditNameInputChange = (value: string) => {
+    // Filter out invalid characters in real-time for edit form
+    const filteredValue = value.replace(/[^a-zA-Z0-9_-]/g, '')
+    handleEditInputChange("name", filteredValue)
+  }
+
   const handleUpdateLocation = async (originalAddress: string) => {
     setMessage(null)
 
@@ -300,7 +327,7 @@ function WorkLocationsContent() {
 
       console.log("Updating work location:", requestBody)
 
-      const response = await fetch(`http://localhost:4000/api/v1/locations/update/${originalAddress}`, {
+      const response = await fetch(`/api/work-locations/update/${originalAddress}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -320,6 +347,14 @@ function WorkLocationsContent() {
         
         // Refresh locations list
         fetchLocations()
+
+        // Refresh work station configuration to update geofencing
+        try {
+          console.log("Refreshing work station configuration after location update")
+          await refreshWorkStationConfig()
+        } catch (error) {
+          console.error("Failed to refresh work station config:", error)
+        }
       } else {
         throw new Error(data.message || "Failed to update work location")
       }
@@ -335,6 +370,16 @@ function WorkLocationsContent() {
   }
 
   const validateEditForm = (): string | null => {
+    if (!editFormData.name.trim()) {
+      return "Location name is required"
+    }
+
+    // Validate location name - only allow letters, numbers, underscores, and hyphens
+    const nameRegex = /^[a-zA-Z0-9_-]+$/
+    if (!nameRegex.test(editFormData.name.trim())) {
+      return "Location name can only contain letters, numbers, underscores (_), and hyphens (-). No spaces or special characters allowed."
+    }
+
     if (!editFormData.address.trim()) {
       return "Address is required"
     }
@@ -412,11 +457,14 @@ function WorkLocationsContent() {
                   <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) => handleInputChange("name", e.target.value)}
-                    placeholder="e.g., Headquarters, Branch Office"
+                    onChange={(e) => handleNameInputChange(e.target.value)}
+                    placeholder="e.g., Headquarters, Main_Office, Branch-01"
                     required
                     disabled={isSaving}
                   />
+                  <p className="text-sm text-slate-500 mt-1">
+                    Only letters, numbers, underscores (_), and hyphens (-) allowed. No spaces.
+                  </p>
                 </div>
 
                 <div>
@@ -567,10 +615,13 @@ function WorkLocationsContent() {
                             <Input
                               id={`edit-name-${location._id}`}
                               value={editFormData.name}
-                              onChange={(e) => handleEditInputChange("name", e.target.value)}
-                              placeholder="e.g., Headquarters, Branch Office"
+                              onChange={(e) => handleEditNameInputChange(e.target.value)}
+                              placeholder="e.g., Headquarters, Main_Office, Branch-01"
                               disabled={isUpdating}
                             />
+                            <p className="text-sm text-slate-500 mt-1">
+                              Only letters, numbers, underscores (_), and hyphens (-) allowed. No spaces.
+                            </p>
                           </div>
 
                           <div>

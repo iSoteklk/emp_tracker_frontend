@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,16 +12,28 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AuthGuard } from "@/components/auth-guard"
-import { Loader2, UserPlus, Eye, EyeOff, CheckCircle, ArrowLeft } from "lucide-react"
+import { Loader2, UserPlus, Eye, EyeOff, CheckCircle, ArrowLeft, MapPin, RefreshCw } from "lucide-react"
 
 interface CreateUserForm {
   email: string
   fname: string
   lname: string
   contact: string
+  location: string
   role: "admin" | "employee" | ""
   password: string
   confirmPassword: string
+}
+
+interface WorkLocation {
+  _id?: string
+  latitude: number
+  longitude: number
+  address: string
+  radius: number
+  name?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 function CreateUserContent() {
@@ -31,6 +43,7 @@ function CreateUserContent() {
     fname: "",
     lname: "",
     contact: "",
+    location: "",
     role: "",
     password: "",
     confirmPassword: "",
@@ -40,6 +53,46 @@ function CreateUserContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [locations, setLocations] = useState<WorkLocation[]>([])
+  const [isLoadingLocations, setIsLoadingLocations] = useState(true)
+
+  // Fetch work locations on component mount
+  useEffect(() => {
+    fetchLocations()
+  }, [])
+
+  const fetchLocations = async () => {
+    setIsLoadingLocations(true)
+    try {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        console.log("No token found, skipping location fetch")
+        setIsLoadingLocations(false)
+        return
+      }
+
+      const response = await fetch("/api/work-locations/getall", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success === "true" && data.data && data.data.data) {
+          setLocations(data.data.data)
+        }
+      } else {
+        console.error("Failed to fetch locations:", response.statusText)
+      }
+    } catch (error) {
+      console.error("Error fetching locations:", error)
+    } finally {
+      setIsLoadingLocations(false)
+    }
+  }
 
   const handleInputChange = (field: keyof CreateUserForm, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -55,6 +108,7 @@ function CreateUserContent() {
       !formData.fname ||
       !formData.lname ||
       !formData.contact ||
+      !formData.location ||
       !formData.role ||
       !formData.password
     ) {
@@ -113,6 +167,7 @@ function CreateUserContent() {
         fname: formData.fname,
         lname: formData.lname,
         contact: formData.contact,
+        location: formData.location,
         role: formData.role,
         password: formData.password,
       }
@@ -161,6 +216,7 @@ function CreateUserContent() {
             fname: "",
             lname: "",
             contact: "",
+            location: "",
             role: "",
             password: "",
             confirmPassword: "",
@@ -281,6 +337,66 @@ function CreateUserContent() {
                       required
                       disabled={isLoading}
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Location *</Label>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Select
+                          value={formData.location}
+                          onValueChange={(value: string) => handleInputChange("location", value)}
+                          disabled={isLoading || isLoadingLocations}
+                        >
+                          <SelectTrigger>
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-gray-400" />
+                              <SelectValue 
+                                placeholder={
+                                  isLoadingLocations 
+                                    ? "Loading locations..." 
+                                    : locations.length === 0 
+                                      ? "No locations available" 
+                                      : "Select work location"
+                                } 
+                              />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {/* Note: Sends location.name (not address) as value */}
+                            {locations.map((location) => (
+                              <SelectItem key={location._id || location.address} value={location.name || location.address}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {location.name || "Unnamed Location"}
+                                  </span>
+                                  <span className="text-xs text-gray-500">{location.address}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={fetchLocations}
+                        disabled={isLoadingLocations || isLoading}
+                        title="Refresh locations"
+                      >
+                        {isLoadingLocations ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    {locations.length === 0 && !isLoadingLocations && (
+                      <p className="text-xs text-amber-600">
+                        No work locations found. Please add locations in the Work Locations section first.
+                      </p>
+                    )}
                   </div>
                 </div>
 

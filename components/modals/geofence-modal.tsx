@@ -32,7 +32,9 @@ export function GeofenceModal({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Navigation className="h-5 w-5 text-orange-500" />
-              <CardTitle className="text-lg">Get Closer to Office</CardTitle>
+              <CardTitle className="text-lg">
+                Get Closer to {geofenceResult?.office.name || "Work Location"}
+              </CardTitle>
             </div>
             <Button variant="ghost" size="sm" onClick={onClose} className="h-6 w-6 p-0">
               <X className="h-4 w-4" />
@@ -43,7 +45,7 @@ export function GeofenceModal({
           <Alert className="border-orange-200 bg-orange-50">
             <Navigation className="h-4 w-4 text-orange-600" />
             <AlertDescription className="text-orange-800">
-              {locationError?.message || "You need to be within the office area to clock in."}
+              {locationError?.message || `You need to be within ${geofenceResult?.office.name || "the work location"} area to clock in.`}
             </AlertDescription>
           </Alert>
 

@@ -52,18 +52,18 @@ export function WorkStationSettings({ onConfigUpdate }: WorkStationSettingsProps
       <CardHeader>
         <div className="flex items-center gap-2">
           <MapPin className="h-5 w-5" />
-          <CardTitle>Main Office Location</CardTitle>
+          <CardTitle>Work Location Configuration</CardTitle>
         </div>
-        <p className="text-sm text-muted-foreground">Configure the main office location and geofencing settings</p>
+        <p className="text-sm text-muted-foreground">Configure your assigned work location and geofencing settings</p>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Main Office Settings */}
+        {/* Work Location Settings */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Office Configuration</h3>
+          <h3 className="text-lg font-semibold">Location Configuration</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="officeName">Office Name</Label>
+              <Label htmlFor="officeName">Location Name</Label>
               <Input
                 id="officeName"
                 value={config.mainOffice.name}
@@ -71,7 +71,7 @@ export function WorkStationSettings({ onConfigUpdate }: WorkStationSettingsProps
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="officeAddress">Office Address</Label>
+              <Label htmlFor="officeAddress">Location Address</Label>
               <Input
                 id="officeAddress"
                 value={config.mainOffice.address || ""}

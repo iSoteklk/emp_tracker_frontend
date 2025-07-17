@@ -311,7 +311,7 @@ export function useLocation(options: UseLocationOptions = {}): UseLocationReturn
               if (!geofence.isWithinOffice) {
                 const geofenceError: LocationError = {
                   code: 0,
-                  message: `You are ${geofence.distance}m away from the office. Please get within ${geofence.office.radius}m to clock in.`,
+                  message: `You are ${geofence.distance}m away from ${geofence.office.name}. Please get within ${geofence.office.radius}m to clock in.`,
                   type: "geofence",
                 }
                 setError(geofenceError)

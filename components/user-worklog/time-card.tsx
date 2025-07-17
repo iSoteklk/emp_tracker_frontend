@@ -9,6 +9,7 @@ import { ClockOutGeofenceModal } from "@/components/modals/clock-out-geofence-mo
 import { EarlyClockOutModal } from "@/components/modals/early-clock-out-modal"
 import { formatElapsedTime, formatTime, formatDate, formatTimezone, getTodayDateString } from "@/lib/date-time-utils"
 import { getWorkConfig, getWorkConfigSync, workTimeConfig } from "@/lib/work-config"
+import { hasValidWorkStationConfig } from "@/lib/work-station-config"
 
 interface GlassTimeCardProps {
   showSeconds?: boolean
@@ -241,6 +242,12 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   }
 
   const handleClockIn = async () => {
+    // Check if user has a valid work location assigned
+    if (!hasValidWorkStationConfig()) {
+      setClockInError("No work location assigned. Please contact your administrator to assign you to a work location before you can clock in.")
+      return
+    }
+
     // Check if already clocked in
     if (shiftStatus === "clocked-in") {
       setClockInError("You are already clocked in. Please refresh to see current status.")
@@ -648,12 +655,18 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       <div className="flex justify-center gap-3">
         <button
           onClick={handleClockIn}
-          disabled={isClockingIn || isLoadingShiftStatus}
+          disabled={isClockingIn || isLoadingShiftStatus || !hasValidWorkStationConfig()}
           className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+          title={!hasValidWorkStationConfig() ? "No work location assigned" : "Clock in to start your shift"}
         >
           <Play className="w-4 h-4" />
           <span className="text-sm">
-            {isClockingIn ? (isGettingLocation ? "Getting Location..." : "Clocking In...") : "Clock In"}
+            {!hasValidWorkStationConfig() 
+              ? "Location Required" 
+              : isClockingIn 
+                ? (isGettingLocation ? "Getting Location..." : "Clocking In...") 
+                : "Clock In"
+            }
           </span>
         </button>
 
@@ -701,17 +714,24 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
               </Badge>
             )}
 
-            {isWithinOffice && geofenceResult && (
+            {!hasValidWorkStationConfig() && (
+              <Badge variant="destructive" className="gap-2 bg-orange-100 text-orange-700 border-orange-200">
+                <AlertTriangle className="h-3 w-3" />
+                No Location Assigned
+              </Badge>
+            )}
+
+            {hasValidWorkStationConfig() && isWithinOffice && geofenceResult && (
               <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-2">
                 <Building className="h-3 w-3" />
                 At {geofenceResult.office.name}
               </Badge>
             )}
 
-            {location && !isWithinOffice && geofenceResult && (
+            {hasValidWorkStationConfig() && location && !isWithinOffice && geofenceResult && (
               <Badge variant="destructive" className="gap-2 bg-orange-100 text-orange-700 border-orange-200">
                 <Navigation className="h-3 w-3" />
-                {geofenceResult.distance}m from office
+                {geofenceResult.distance}m from {geofenceResult.office.name}
               </Badge>
             )}
           </div>

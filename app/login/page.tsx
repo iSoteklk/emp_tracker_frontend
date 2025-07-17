@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Eye, EyeOff } from "lucide-react"
+import { refreshWorkStationConfig } from "@/lib/work-station-config"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -44,6 +45,12 @@ export default function LoginPage() {
         localStorage.setItem("token", data.token)
         localStorage.setItem("contact", data.contact)
 
+        // Store location data if provided by backend
+        if (data.location) {
+          localStorage.setItem("userLocation", JSON.stringify(data.location))
+          console.log("Location data stored:", data.location)
+        }
+
         // Decode JWT to get user info (basic decode, not verification)
         const tokenPayload = JSON.parse(atob(data.token.split(".")[1]))
 
@@ -56,9 +63,19 @@ export default function LoginPage() {
           contact: data.contact || tokenPayload.contact,
           role: data.role || tokenPayload.role,
           name: data.name || `${tokenPayload.fname} ${tokenPayload.lname}`,
+          location: data.location || null, // Include location in user data
         }
 
         localStorage.setItem("user", JSON.stringify(userData))
+
+        // Refresh work station configuration with user's location
+        try {
+          console.log("Refreshing work station configuration for user location:", userData.location)
+          await refreshWorkStationConfig()
+        } catch (error) {
+          console.error("Failed to refresh work station config:", error)
+          // Continue with login flow even if config refresh fails
+        }
 
         // Dispatch custom event to notify sidebar and other components
         window.dispatchEvent(new Event("auth-change"))

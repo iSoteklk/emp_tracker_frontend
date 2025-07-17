@@ -43,7 +43,7 @@ export function ClockOutGeofenceModal({
           <Alert className="border-orange-200 bg-orange-50">
             <Building className="h-4 w-4 text-orange-600" />
             <AlertDescription className="text-orange-800">
-              {locationError?.message || "You need to be at the office location to clock out and stop your timer."}
+              {locationError?.message || `You need to be at ${geofenceResult?.office.name || "the work location"} to clock out and stop your timer.`}
             </AlertDescription>
           </Alert>
 
@@ -85,7 +85,7 @@ export function ClockOutGeofenceModal({
 
               <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
                 <p className="text-sm text-yellow-800">
-                  <strong>Note:</strong> Your timer will continue running until you return to the office and clock out
+                  <strong>Note:</strong> Your timer will continue running until you return to {geofenceResult?.office.name || "the work location"} and clock out
                   properly.
                 </p>
               </div>

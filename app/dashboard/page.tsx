@@ -11,6 +11,7 @@ import { AuthGuard } from "@/components/auth-guard"
 import { LogOut } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { refreshWorkStationConfig } from "@/lib/work-station-config"
 
 function UserDashboardContent() {
   const router = useRouter()
@@ -28,7 +29,19 @@ function UserDashboardContent() {
       // Redirect admin users to admin dashboard
       if (parsedUser.role === "admin") {
         router.push("/admin")
+        return
       }
+
+      // Refresh work station configuration for the user's location
+      const refreshConfig = async () => {
+        try {
+          console.log("Refreshing work station configuration for dashboard")
+          await refreshWorkStationConfig()
+        } catch (error) {
+          console.error("Failed to refresh work station config:", error)
+        }
+      }
+      refreshConfig()
     }
   }, [router])
 
