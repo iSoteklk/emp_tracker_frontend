@@ -10,6 +10,7 @@ import { EarlyClockOutModal } from "@/components/modals/early-clock-out-modal"
 import { formatElapsedTime, formatTime, formatDate, formatTimezone, getTodayDateString } from "@/lib/date-time-utils"
 import { getWorkConfig, getWorkConfigSync, workTimeConfig } from "@/lib/work-config"
 import { hasValidWorkStationConfig } from "@/lib/work-station-config"
+import { LocationSearch } from "./location-search"
 
 interface GlassTimeCardProps {
   showSeconds?: boolean
@@ -46,6 +47,17 @@ interface ShiftStatusResponse {
   data: ShiftData[]
 }
 
+interface WorkLocation {
+  _id: string
+  name: string
+  address: string
+  latitude: number
+  longitude: number
+  radius: number
+  createdAt: string
+  updatedAt: string
+}
+
 export function GlassTimeCard(props: GlassTimeCardProps) {
   const { showSeconds = true, showTimezone = false } = props
 
@@ -74,6 +86,9 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
 
   // Auto-refresh interval for syncing across devices
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<NodeJS.Timeout | null>(null)
+
+  // Add new state for selected location
+  const [selectedWorkLocation, setSelectedWorkLocation] = useState<WorkLocation | null>(null)
 
   // Use the location hook
   const {
@@ -241,7 +256,32 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     clearError()
   }
 
+  // Add location selection handler
+  const handleLocationSelect = (location: WorkLocation) => {
+    setSelectedWorkLocation(location)
+    // Clear any existing errors
+    setClockInError("")
+  }
+
+  // Add distance calculation function
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371000 // Earth's radius in meters
+    const dLat = ((lat2 - lat1) * Math.PI) / 180
+    const dLon = ((lon2 - lon1) * Math.PI) / 180
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c // Distance in meters
+  }
+
   const handleClockIn = async () => {
+    // Check if a location is selected
+    if (!selectedWorkLocation) {
+      setClockInError("Please select your work location before clocking in.")
+      return
+    }
+
     // Check if user has a valid work location assigned
     if (!hasValidWorkStationConfig()) {
       setClockInError("No work location assigned. Please contact your administrator to assign you to a work location before you can clock in.")
@@ -262,6 +302,20 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       // Always get fresh location when clocking in
       const locationData = await getCurrentLocation(true) // Force refresh
 
+      // Validate if user is at the selected location
+      const distance = calculateDistance(
+        locationData.latitude,
+        locationData.longitude,
+        selectedWorkLocation.latitude,
+        selectedWorkLocation.longitude
+      )
+
+      if (distance > selectedWorkLocation.radius) {
+        setClockInError(`You are not at ${selectedWorkLocation.name}. Please make sure you are within ${selectedWorkLocation.radius}m of the location.`)
+        setIsClockingIn(false)
+        return
+      }
+
       // Now proceed with clock in API call
       const token = localStorage.getItem("token")
       if (!token) {
@@ -274,6 +328,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         location: locationData,
         geofence: geofenceResult,
         notes: clockInNotes,
+        workLocationId: selectedWorkLocation._id // Add selected location ID
       }
 
       console.log("Sending clock-in request:", requestBody)
@@ -599,9 +654,16 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       <div className="text-center w-full">
         <div className="text-sm text-slate-600 mb-2">Ready to Start</div>
         <div className="text-4xl font-bold tabular-nums mb-4 text-slate-800">00:00:00</div>
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
-          <div className="font-semibold">No active shift</div>
-          <div className="text-xs text-blue-600">Click Clock In to start your shift</div>
+        <div className="mb-4 space-y-4">
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+            <div className="font-semibold">No active shift</div>
+            <div className="text-xs text-blue-600">Select your location and clock in to start your shift</div>
+          </div>
+          
+          <LocationSearch 
+            onLocationSelect={handleLocationSelect}
+            className="w-full"
+          />
         </div>
       </div>
     )
