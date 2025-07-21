@@ -272,7 +272,7 @@ export function useLocation(options: UseLocationOptions = {}): UseLocationReturn
         const options: PositionOptions = {
           enableHighAccuracy: config.enableHighAccuracy,
           timeout: config.timeout,
-          maximumAge: forceRefresh ? 0 : config.maximumAge, // Force fresh location if requested
+          maximumAge: forceRefresh ? 0 : config.maximumAge,
         }
 
         console.log("Getting current location with options:", options)
@@ -301,13 +301,23 @@ export function useLocation(options: UseLocationOptions = {}): UseLocationReturn
                 }
               }
 
-              // Check geofence
+              // Update state with location data first
+              setLocation(locationData)
+              setPermissionStatus("granted")
+
+              // Save to localStorage
+              if (typeof window !== "undefined") {
+                localStorage.setItem("userLocation", JSON.stringify(locationData))
+              }
+
+              // Check geofence after location is set
               const geofence = checkGeofenceInternal(locationData)
               setGeofenceResult(geofence)
 
               console.log("Geofence check result:", geofence)
 
-              // Check if user is within office
+              // Note: We don't throw error here for geofence check
+              // Instead we let the component handle the geofence status
               if (!geofence.isWithinOffice) {
                 const geofenceError: LocationError = {
                   code: 0,
@@ -315,38 +325,12 @@ export function useLocation(options: UseLocationOptions = {}): UseLocationReturn
                   type: "geofence",
                 }
                 setError(geofenceError)
-                setIsLoading(false)
-
-                // Still update location even if outside geofence
-                setLocation(locationData)
-                setPermissionStatus("granted")
-
-                // Save to localStorage
-                if (typeof window !== "undefined") {
-                  localStorage.setItem("userLocation", JSON.stringify(locationData))
-                }
-
-                throw new Error(geofenceError.message)
               }
 
-              // Update state
-              setLocation(locationData)
-              setPermissionStatus("granted")
               setIsLoading(false)
-
-              // Save to localStorage
-              if (typeof window !== "undefined") {
-                localStorage.setItem("userLocation", JSON.stringify(locationData))
-              }
-
-              console.log("Location successfully updated and within geofence")
               resolve(locationData)
             } catch (error) {
               setIsLoading(false)
-              if (error instanceof Error && error.message.includes("office")) {
-                // Re-throw geofence errors
-                throw error
-              }
               const locationError: LocationError = {
                 code: 0,
                 message: "Failed to process location data",
@@ -373,7 +357,7 @@ export function useLocation(options: UseLocationOptions = {}): UseLocationReturn
         )
       })
     },
-    [isLocationSupported, location],
+    [isLocationSupported, location, config],
   )
 
   const refreshLocation = useCallback(async (): Promise<void> => {

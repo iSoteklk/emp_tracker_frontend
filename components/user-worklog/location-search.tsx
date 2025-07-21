@@ -41,6 +41,7 @@ export function LocationSearch({ onLocationSelect, className }: LocationSearchPr
   const [selectedLocation, setSelectedLocation] = useState<WorkLocation | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
 
   const { location: userLocation, geofenceResult } = useLocation()
 
@@ -88,6 +89,31 @@ export function LocationSearch({ onLocationSelect, className }: LocationSearchPr
   const handleSelect = (location: WorkLocation) => {
     setSelectedLocation(location)
     setOpen(false)
+
+    // Update workStationConfig with selected location
+    const config = {
+      mainOffice: {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        radius: location.radius,
+        address: location.address,
+        name: location.name,
+      }
+    }
+
+    // Save to localStorage
+    if (typeof window !== "undefined") {
+      localStorage.setItem("workStationConfig", JSON.stringify(config))
+      
+      // Dispatch event to notify other components
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: "workStationConfig",
+        newValue: JSON.stringify(config),
+        storageArea: localStorage
+      }))
+      window.dispatchEvent(new CustomEvent("workStationConfigUpdated"))
+    }
+
     onLocationSelect(location)
   }
 
@@ -120,6 +146,8 @@ export function LocationSearch({ onLocationSelect, className }: LocationSearchPr
     return R * c // Distance in meters
   }
 
+  const displayedLocations = showAll ? locations : locations.slice(0, 3)
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -148,15 +176,15 @@ export function LocationSearch({ onLocationSelect, className }: LocationSearchPr
         <Command>
           <CommandInput placeholder="Search locations..." />
           <CommandEmpty>No locations found.</CommandEmpty>
-          <CommandGroup>
-            {locations.map((location) => {
+          <CommandGroup className="max-h-[180px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent hover:scrollbar-thumb-gray-300">
+            {displayedLocations.map((location) => {
               const status = getLocationStatus(location)
               return (
                 <CommandItem
                   key={location._id}
                   value={location.name}
                   onSelect={() => handleSelect(location)}
-                  className="flex flex-col items-start py-3"
+                  className="flex flex-col items-start py-3 border-b last:border-b-0 border-gray-100"
                 >
                   <div className="flex items-center w-full">
                     <Check
@@ -192,6 +220,14 @@ export function LocationSearch({ onLocationSelect, className }: LocationSearchPr
                 </CommandItem>
               )
             })}
+            {!showAll && locations.length > 3 && (
+              <CommandItem
+                onSelect={() => setShowAll(true)}
+                className="py-2 text-sm text-blue-600 hover:text-blue-800 text-center cursor-pointer"
+              >
+                Show {locations.length - 3} more locations...
+              </CommandItem>
+            )}
           </CommandGroup>
         </Command>
       </PopoverContent>

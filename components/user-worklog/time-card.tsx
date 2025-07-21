@@ -1,6 +1,6 @@
 "use client"
-import { useState, useEffect } from "react"
-import { Play, Square, X, AlertTriangle, Navigation, Building, RefreshCw } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { Play, Square, X, AlertTriangle, Navigation, Building, RefreshCw, MapPin } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useLocation } from "@/hooks/use-location"
 import { LocationPermissionModal } from "@/components/modals/location-permission-modal"
@@ -11,6 +11,7 @@ import { formatElapsedTime, formatTime, formatDate, formatTimezone, getTodayDate
 import { getWorkConfig, getWorkConfigSync, workTimeConfig } from "@/lib/work-config"
 import { hasValidWorkStationConfig } from "@/lib/work-station-config"
 import { LocationSearch } from "./location-search"
+import { cn } from "@/lib/utils"
 
 interface GlassTimeCardProps {
   showSeconds?: boolean
@@ -310,8 +311,13 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         selectedWorkLocation.longitude
       )
 
+      console.log("Distance to selected location:", distance, "meters")
+      console.log("Selected location radius:", selectedWorkLocation.radius, "meters")
+
       if (distance > selectedWorkLocation.radius) {
-        setClockInError(`You are not at ${selectedWorkLocation.name}. Please make sure you are within ${selectedWorkLocation.radius}m of the location.`)
+        const errorMessage = `You are ${Math.round(distance)}m away from ${selectedWorkLocation.name}. Please get within ${selectedWorkLocation.radius}m of the location.`
+        console.log("Clock-in error:", errorMessage)
+        setClockInError(errorMessage)
         setIsClockingIn(false)
         return
       }
@@ -325,10 +331,15 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       }
 
       const requestBody = {
-        location: locationData,
-        geofence: geofenceResult,
-        notes: clockInNotes,
-        workLocationId: selectedWorkLocation._id // Add selected location ID
+        location: {
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          accuracy: locationData.accuracy,
+          timestamp: locationData.timestamp,
+          address: locationData.address
+        },
+        workLocationId: selectedWorkLocation._id,
+        notes: clockInNotes
       }
 
       console.log("Sending clock-in request:", requestBody)
@@ -343,40 +354,25 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       })
 
       const data = await response.json()
-      console.log("Clock-in response:", data)
 
       if (response.ok && data.success === "true") {
-        // Successfully clocked in - refresh shift status immediately
-        await fetchShiftStatus()
+        // Clear any errors
         setClockInError("")
-        setIsClockingIn(false)
-
-        console.log("Clock-in successful, status updated")
+        clearError()
+        
+        // Update shift status
+        await fetchShiftStatus()
+        
+        // Clear notes
+        setClockInNotes("")
       } else {
-        // Handle specific error cases
-        if (data.message && data.message.includes("already clocked in")) {
-          setClockInError("You are already clocked in today. Refreshing status...")
-          await fetchShiftStatus()
-        } else {
-          setClockInError(data.message || data.error || `Server error: ${response.status}`)
-        }
-        setIsClockingIn(false)
+        throw new Error(data.message || "Failed to clock in")
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error"
       console.error("Clock-in error:", error)
-
-      // Reset button state first
+      setClockInError(error instanceof Error ? error.message : "Failed to clock in")
+    } finally {
       setIsClockingIn(false)
-
-      // Check if it's a location permission error
-      if (locationError?.type === "permission" || isPermissionBlocked) {
-        setShowLocationModal(true)
-      } else if (locationError?.type === "geofence" || errorMessage.includes("office")) {
-        setShowGeofenceModal(true)
-      } else {
-        setClockInError(`Error: ${errorMessage}`)
-      }
     }
   }
 
@@ -384,6 +380,18 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     // Check if not clocked in
     if (shiftStatus !== "clocked-in") {
       setClockOutError("You are not currently clocked in. Please refresh to see current status.")
+      return
+    }
+
+    // Check if a location is selected
+    if (!selectedWorkLocation) {
+      setClockOutError("Please select your work location before clocking out.")
+      return
+    }
+
+    // Check if user has a valid work location assigned
+    if (!hasValidWorkStationConfig()) {
+      setClockOutError("No work location assigned. Please contact your administrator.")
       return
     }
 
@@ -405,13 +413,32 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     clearError()
 
     try {
+      // Check if a location is selected (defensive check)
+      if (!selectedWorkLocation) {
+        setClockOutError("Please select your work location before clocking out.")
+        setIsClockingOut(false)
+        return
+      }
+
       // Always get fresh location when clocking out
       const locationData = await getCurrentLocation(true) // Force refresh
 
-      // Check if user is within office for clock out
-      if (!geofenceResult?.isWithinOffice) {
+      // Validate if user is at the selected location
+      const distance = calculateDistance(
+        locationData.latitude,
+        locationData.longitude,
+        selectedWorkLocation.latitude,
+        selectedWorkLocation.longitude
+      )
+
+      console.log("Distance to selected location for clock-out:", distance, "meters")
+      console.log("Selected location radius:", selectedWorkLocation.radius, "meters")
+
+      if (distance > selectedWorkLocation.radius) {
+        const errorMessage = `You are ${Math.round(distance)}m away from ${selectedWorkLocation.name}. Please get within ${selectedWorkLocation.radius}m of the location to clock out.`
+        console.log("Clock-out error:", errorMessage)
+        setClockOutError(errorMessage)
         setIsClockingOut(false)
-        setShowClockOutGeofenceModal(true)
         return
       }
 
@@ -424,9 +451,15 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       }
 
       const requestBody = {
-        location: locationData,
-        geofence: geofenceResult,
-        notes: clockOutNotes,
+        location: {
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          accuracy: locationData.accuracy,
+          timestamp: locationData.timestamp,
+          address: locationData.address
+        },
+        workLocationId: selectedWorkLocation._id,
+        notes: clockOutNotes
       }
 
       console.log("Sending clock-out request:", requestBody)
@@ -447,32 +480,17 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         // Successfully clocked out - refresh shift status immediately
         await fetchShiftStatus()
         setClockOutError("")
+        setClockOutNotes("")
         setIsClockingOut(false)
-
         console.log("Clock-out successful, status updated")
       } else {
-        // Handle specific error cases
-        if (data.message && data.message.includes("not clocked in")) {
-          setClockOutError("You are not currently clocked in. Refreshing status...")
-          await fetchShiftStatus()
-        } else {
-          setClockOutError(data.message || data.error || `Server error: ${response.status}`)
-        }
-        setIsClockingOut(false)
+        throw new Error(data.message || "Failed to clock out")
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error"
       console.error("Clock-out error:", error)
-
-      // Reset button state first
+      setClockOutError(error instanceof Error ? error.message : "Failed to clock out")
+    } finally {
       setIsClockingOut(false)
-
-      // Check if it's a geofence error
-      if (locationError?.type === "geofence" || errorMessage.includes("office")) {
-        setShowClockOutGeofenceModal(true)
-      } else {
-        setClockOutError(`Error: ${errorMessage}`)
-      }
     }
   }
 
@@ -556,6 +574,19 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
   const hoursWorked = Math.floor(elapsedTime / 3600)
   const minutesWorked = Math.floor((elapsedTime % 3600) / 60)
 
+  const isWithinRadius = useMemo(() => {
+    if (!location || !selectedWorkLocation) return false;
+    
+    const distance = calculateDistance(
+      location.latitude,
+      location.longitude,
+      selectedWorkLocation.latitude,
+      selectedWorkLocation.longitude
+    );
+    
+    return distance <= selectedWorkLocation.radius;
+  }, [location, selectedWorkLocation]);
+
   // Render different content based on shift status
   const renderShiftContent = () => {
     if (isLoadingShiftStatus) {
@@ -602,6 +633,14 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
               <div className="text-blue-600">Remaining: {formatElapsedTime(remainingTime, false)}</div>
             </div>
           )}
+
+          {/* Location Selection for Clock Out */}
+          <div className="mb-4">
+            <LocationSearch 
+              onLocationSelect={handleLocationSelect}
+              className="w-full"
+            />
+          </div>
 
           {/* Status Indicators */}
           <div className="flex justify-center gap-4 mb-4">
@@ -776,24 +815,46 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
               </Badge>
             )}
 
-            {!hasValidWorkStationConfig() && (
-              <Badge variant="destructive" className="gap-2 bg-orange-100 text-orange-700 border-orange-200">
-                <AlertTriangle className="h-3 w-3" />
-                No Location Assigned
+            {selectedWorkLocation ? (
+              location && (
+                <Badge 
+                  variant={isWithinRadius ? "secondary" : "destructive"} 
+                  className={cn(
+                    "gap-2",
+                    isWithinRadius 
+                      ? "bg-emerald-100 text-emerald-700 border-emerald-200" 
+                      : "bg-orange-100 text-orange-700 border-orange-200"
+                  )}
+                >
+                  {isWithinRadius ? (
+                    <>
+                      <Building className="h-3 w-3" />
+                      At {selectedWorkLocation.name}
+                    </>
+                  ) : (
+                    <>
+                      <Navigation className="h-3 w-3" />
+                      {calculateDistance(
+                        location.latitude,
+                        location.longitude,
+                        selectedWorkLocation.latitude,
+                        selectedWorkLocation.longitude
+                      ).toFixed(0)}m from {selectedWorkLocation.name}
+                    </>
+                  )}
+                </Badge>
+              )
+            ) : (
+              <Badge variant="outline" className="gap-2">
+                <MapPin className="h-3 w-3" />
+                Select Location
               </Badge>
             )}
 
-            {hasValidWorkStationConfig() && isWithinOffice && geofenceResult && (
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-2">
-                <Building className="h-3 w-3" />
-                At {geofenceResult.office.name}
-              </Badge>
-            )}
-
-            {hasValidWorkStationConfig() && location && !isWithinOffice && geofenceResult && (
-              <Badge variant="destructive" className="gap-2 bg-orange-100 text-orange-700 border-orange-200">
-                <Navigation className="h-3 w-3" />
-                {geofenceResult.distance}m from {geofenceResult.office.name}
+            {isGettingLocation && (
+              <Badge variant="outline" className="gap-2 animate-pulse">
+                <RefreshCw className="h-3 w-3" />
+                Updating Location...
               </Badge>
             )}
           </div>
