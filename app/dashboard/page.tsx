@@ -102,7 +102,7 @@ function UserDashboardContent() {
             )}
 
             {/* Location Display - Only show if location has been obtained */}
-            <LocationDisplay showRefresh={true} />
+            {/* <LocationDisplay showRefresh={true} /> */}
           </div>
 
           {/* Right Column - Work Log Table */}

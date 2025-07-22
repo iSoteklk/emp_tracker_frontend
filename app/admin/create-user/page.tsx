@@ -43,7 +43,7 @@ function CreateUserContent() {
     fname: "",
     lname: "",
     contact: "",
-    location: "",
+    location: "default",
     role: "",
     password: "",
     confirmPassword: "",
@@ -57,42 +57,42 @@ function CreateUserContent() {
   const [isLoadingLocations, setIsLoadingLocations] = useState(true)
 
   // Fetch work locations on component mount
-  useEffect(() => {
-    fetchLocations()
-  }, [])
+  // useEffect(() => {
+  //   fetchLocations()
+  // }, [])
 
-  const fetchLocations = async () => {
-    setIsLoadingLocations(true)
-    try {
-      const token = localStorage.getItem("token")
-      if (!token) {
-        console.log("No token found, skipping location fetch")
-        setIsLoadingLocations(false)
-        return
-      }
+  // const fetchLocations = async () => {
+  //   setIsLoadingLocations(true)
+  //   try {
+  //     const token = localStorage.getItem("token")
+  //     if (!token) {
+  //       console.log("No token found, skipping location fetch")
+  //       setIsLoadingLocations(false)
+  //       return
+  //     }
 
-      const response = await fetch("/api/work-locations/getall", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
+  //     const response = await fetch("/api/work-locations/getall", {
+  //       method: "GET",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         Authorization: `Bearer ${token}`,
+  //       },
+  //     })
 
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success === "true" && data.data && data.data.data) {
-          setLocations(data.data.data)
-        }
-      } else {
-        console.error("Failed to fetch locations:", response.statusText)
-      }
-    } catch (error) {
-      console.error("Error fetching locations:", error)
-    } finally {
-      setIsLoadingLocations(false)
-    }
-  }
+  //     if (response.ok) {
+  //       const data = await response.json()
+  //       if (data.success === "true" && data.data && data.data.data) {
+  //         setLocations(data.data.data)
+  //       }
+  //     } else {
+  //       console.error("Failed to fetch locations:", response.statusText)
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching locations:", error)
+  //   } finally {
+  //     setIsLoadingLocations(false)
+  //   }
+  // }
 
   const handleInputChange = (field: keyof CreateUserForm, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -339,65 +339,7 @@ function CreateUserContent() {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="location">Location *</Label>
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <Select
-                          value={formData.location}
-                          onValueChange={(value: string) => handleInputChange("location", value)}
-                          disabled={isLoading || isLoadingLocations}
-                        >
-                          <SelectTrigger>
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4 text-gray-400" />
-                              <SelectValue 
-                                placeholder={
-                                  isLoadingLocations 
-                                    ? "Loading locations..." 
-                                    : locations.length === 0 
-                                      ? "No locations available" 
-                                      : "Select work location"
-                                } 
-                              />
-                            </div>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {/* Note: Sends location.name (not address) as value */}
-                            {locations.map((location) => (
-                              <SelectItem key={location._id || location.address} value={location.name || location.address}>
-                                <div className="flex flex-col">
-                                  <span className="font-medium">
-                                    {location.name || "Unnamed Location"}
-                                  </span>
-                                  <span className="text-xs text-gray-500">{location.address}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={fetchLocations}
-                        disabled={isLoadingLocations || isLoading}
-                        title="Refresh locations"
-                      >
-                        {isLoadingLocations ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                    {locations.length === 0 && !isLoadingLocations && (
-                      <p className="text-xs text-amber-600">
-                        No work locations found. Please add locations in the Work Locations section first.
-                      </p>
-                    )}
-                  </div>
+                  
                 </div>
 
                 {/* Role Selection */}

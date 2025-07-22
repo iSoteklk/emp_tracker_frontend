@@ -36,6 +36,7 @@ interface ShiftData {
     address: string
     accuracy: number
   }
+  workLocationId: string  // Add this field
   totalHours: string
   status: "clocked-in" | "clocked-out"
   notes: string
@@ -218,6 +219,29 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
           console.log("Current shift data:", shift)
           setShiftData(shift)
 
+          // If clocked in, fetch and set the work location from the shift data
+          if (shift.clockInTime && !shift.clockOutTime && shift.workLocationId) {
+            try {
+              const locationResponse = await fetch(`/api/work-location/${shift.workLocationId}`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+              const locationData = await locationResponse.json();
+              if (locationResponse.ok && locationData.success === "true") {
+                console.log("Setting work location from shift:", locationData.data);
+                setSelectedWorkLocation(locationData.data);
+              }
+            } catch (error) {
+              console.error("Failed to fetch work location:", error);
+              // Clear selected location if fetch fails
+              setSelectedWorkLocation(null);
+            }
+          } else {
+            // Clear selected location if not clocked in or already clocked out
+            setSelectedWorkLocation(null);
+          }
+
           // Determine status based on clockOutTime
           if (shift.clockOutTime) {
             setShiftStatus("clocked-out")
@@ -231,14 +255,17 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
           console.log("No shift found for today")
           setShiftStatus("no-shift")
           setShiftData(null)
+          setSelectedWorkLocation(null)
         }
       } else {
         console.error("Failed to fetch shift status:", data)
         setShiftStatus("no-shift")
+        setSelectedWorkLocation(null)
       }
     } catch (error) {
       console.error("Error fetching shift status:", error)
       setShiftStatus("no-shift")
+      setSelectedWorkLocation(null)
     } finally {
       setIsLoadingShiftStatus(false)
     }
@@ -280,12 +307,6 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     // Check if a location is selected
     if (!selectedWorkLocation) {
       setClockInError("Please select your work location before clocking in.")
-      return
-    }
-
-    // Check if user has a valid work location assigned
-    if (!hasValidWorkStationConfig()) {
-      setClockInError("No work location assigned. Please contact your administrator to assign you to a work location before you can clock in.")
       return
     }
 
@@ -389,22 +410,38 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       return
     }
 
-    // Check if user has a valid work location assigned
-    if (!hasValidWorkStationConfig()) {
-      setClockOutError("No work location assigned. Please contact your administrator.")
-      return
+    // Get fresh location to validate position
+    try {
+      const locationData = await getCurrentLocation(true) // Force refresh
+      
+      // Calculate distance to selected location
+      const distance = calculateDistance(
+        locationData.latitude,
+        locationData.longitude,
+        selectedWorkLocation.latitude,
+        selectedWorkLocation.longitude
+      )
+
+      if (distance > selectedWorkLocation.radius) {
+        const errorMessage = `You are ${Math.round(distance)}m away from ${selectedWorkLocation.name}. Please get within ${selectedWorkLocation.radius}m of the location to clock out.`
+        setClockOutError(errorMessage)
+        return
+      }
+
+      // Use dynamic work configuration for early clock out check
+      const FULL_WORK_HOURS_IN_SECONDS = workConfig.fullWorkingHours * 60 * 60
+
+      if (elapsedTime < FULL_WORK_HOURS_IN_SECONDS) {
+        setShowEarlyClockOutModal(true)
+        return
+      }
+
+      // Proceed with normal clock out
+      await performClockOut()
+    } catch (error) {
+      console.error("Location validation error:", error)
+      setClockOutError("Failed to validate your location. Please try again.")
     }
-
-    // Use dynamic work configuration for early clock out check
-    const FULL_WORK_HOURS_IN_SECONDS = workConfig.fullWorkingHours * 60 * 60
-
-    if (elapsedTime < FULL_WORK_HOURS_IN_SECONDS) {
-      setShowEarlyClockOutModal(true)
-      return
-    }
-
-    // Proceed with normal clock out
-    await performClockOut()
   }
 
   const performClockOut = async () => {
@@ -413,7 +450,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     clearError()
 
     try {
-      // Check if a location is selected (defensive check)
+      // Double check location selection (defensive check)
       if (!selectedWorkLocation) {
         setClockOutError("Please select your work location before clocking out.")
         setIsClockingOut(false)
@@ -423,7 +460,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
       // Always get fresh location when clocking out
       const locationData = await getCurrentLocation(true) // Force refresh
 
-      // Validate if user is at the selected location
+      // Revalidate location before proceeding
       const distance = calculateDistance(
         locationData.latitude,
         locationData.longitude,
@@ -431,18 +468,13 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
         selectedWorkLocation.longitude
       )
 
-      console.log("Distance to selected location for clock-out:", distance, "meters")
-      console.log("Selected location radius:", selectedWorkLocation.radius, "meters")
-
       if (distance > selectedWorkLocation.radius) {
         const errorMessage = `You are ${Math.round(distance)}m away from ${selectedWorkLocation.name}. Please get within ${selectedWorkLocation.radius}m of the location to clock out.`
-        console.log("Clock-out error:", errorMessage)
         setClockOutError(errorMessage)
         setIsClockingOut(false)
         return
       }
 
-      // Now proceed with clock out API call
       const token = localStorage.getItem("token")
       if (!token) {
         setClockOutError("Please login first")
@@ -587,7 +619,98 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     return distance <= selectedWorkLocation.radius;
   }, [location, selectedWorkLocation]);
 
-  // Render different content based on shift status
+  // Add isLocationSelected helper
+  const isLocationSelected = selectedWorkLocation !== null;
+
+  // Update renderControlButtons to properly handle location state
+  const renderControlButtons = () => {
+    if (shiftStatus === "clocked-out") {
+      return (
+        <div className="flex justify-center gap-3">
+          <button
+            onClick={handleRefresh}
+            disabled={isGettingLocation || isLoadingShiftStatus}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+            title="Refresh status"
+          >
+            <RefreshCw className={`w-4 h-4 ${isGettingLocation || isLoadingShiftStatus ? "animate-spin" : ""}`} />
+            <span className="text-sm">Refresh</span>
+          </button>
+        </div>
+      )
+    }
+
+    if (shiftStatus === "clocked-in") {
+      // Only show clock out button if we have the work location
+      const canClockOut = selectedWorkLocation !== null;
+      const buttonTitle = canClockOut ? "Clock out to end your shift" : "Loading work location...";
+
+      return (
+        <div className="flex justify-center gap-3">
+          <button
+            onClick={handleClockOut}
+            disabled={isClockingOut || !canClockOut}
+            className="flex items-center gap-2 px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+            title={buttonTitle}
+          >
+            <Square className="w-4 h-4" />
+            <span className="text-sm">
+              {isClockingOut 
+                ? (isGettingLocation ? "Getting Location..." : "Clocking Out...") 
+                : "Clock Out"
+              }
+            </span>
+          </button>
+
+          <button
+            onClick={handleRefresh}
+            disabled={isGettingLocation || isLoadingShiftStatus}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+            title="Refresh location and status"
+          >
+            <RefreshCw className={`w-4 h-4 ${isGettingLocation || isLoadingShiftStatus ? "animate-spin" : ""}`} />
+            <span className="text-sm">Refresh</span>
+          </button>
+        </div>
+      )
+    }
+
+    // Default case: no shift
+    const buttonTitle = !isLocationSelected ? "Please select a location first" : "Clock in to start your shift";
+
+    return (
+      <div className="flex justify-center gap-3">
+        <button
+          onClick={handleClockIn}
+          disabled={isClockingIn || isLoadingShiftStatus || !isLocationSelected}
+          className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+          title={buttonTitle}
+        >
+          <Play className="w-4 h-4" />
+          <span className="text-sm">
+            {!isLocationSelected 
+              ? "Select Location" 
+              : isClockingIn 
+                ? (isGettingLocation ? "Getting Location..." : "Clocking In...") 
+                : "Clock In"
+            }
+          </span>
+        </button>
+
+        <button
+          onClick={handleRefresh}
+          disabled={isGettingLocation || isLoadingShiftStatus}
+          className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
+          title="Refresh location and status"
+        >
+          <RefreshCw className={`w-4 h-4 ${isGettingLocation || isLoadingShiftStatus ? "animate-spin" : ""}`} />
+          <span className="text-sm">Refresh</span>
+        </button>
+      </div>
+    )
+  }
+
+  // Update renderShiftContent function to not show location selection when already clocked in
   const renderShiftContent = () => {
     if (isLoadingShiftStatus) {
       return (
@@ -635,10 +758,20 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
           )}
 
           {/* Location Selection for Clock Out */}
-          <div className="mb-4">
+          <div className="mb-4 space-y-4">
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+              <div className="font-semibold">Verify Work Location</div>
+              <div className="text-xs text-blue-600">
+                {selectedWorkLocation 
+                  ? `Currently at: ${selectedWorkLocation.name}`
+                  : "Select or verify your work location"}
+              </div>
+            </div>
+            
             <LocationSearch 
               onLocationSelect={handleLocationSelect}
               className="w-full"
+              defaultValue={selectedWorkLocation}
             />
           </div>
 
@@ -654,18 +787,6 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
               <div className="flex items-center gap-1 text-emerald-600">
                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
                 <span className="text-xs font-medium">Overtime</span>
-              </div>
-            )}
-            {isGettingLocation && (
-              <div className="flex items-center gap-1 text-blue-600">
-                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                <span className="text-xs font-medium">Getting Location...</span>
-              </div>
-            )}
-            {isClockingOut && (
-              <div className="flex items-center gap-1 text-orange-600">
-                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
-                <span className="text-xs font-medium">Clocking Out...</span>
               </div>
             )}
             <div className="flex items-center gap-1 text-emerald-600">
@@ -708,82 +829,6 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
     )
   }
 
-  // Render control buttons based on shift status
-  const renderControlButtons = () => {
-    if (shiftStatus === "clocked-out") {
-      return (
-        <div className="flex justify-center gap-3">
-          <button
-            onClick={handleRefresh}
-            disabled={isGettingLocation || isLoadingShiftStatus}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
-            title="Refresh status"
-          >
-            <RefreshCw className={`w-4 h-4 ${isGettingLocation || isLoadingShiftStatus ? "animate-spin" : ""}`} />
-            <span className="text-sm">Refresh</span>
-          </button>
-        </div>
-      )
-    }
-
-    if (shiftStatus === "clocked-in") {
-      return (
-        <div className="flex justify-center gap-3">
-          <button
-            onClick={handleClockOut}
-            className="flex items-center gap-2 px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
-            disabled={isClockingOut}
-          >
-            <Square className="w-4 h-4" />
-            <span className="text-sm">{isClockingOut ? "Clocking Out..." : "Clock Out"}</span>
-          </button>
-
-          <button
-            onClick={handleRefresh}
-            disabled={isGettingLocation || isLoadingShiftStatus}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
-            title="Refresh location and status"
-          >
-            <RefreshCw className={`w-4 h-4 ${isGettingLocation || isLoadingShiftStatus ? "animate-spin" : ""}`} />
-            <span className="text-sm">Refresh</span>
-          </button>
-        </div>
-      )
-    }
-
-    // Default case: no shift
-    return (
-      <div className="flex justify-center gap-3">
-        <button
-          onClick={handleClockIn}
-          disabled={isClockingIn || isLoadingShiftStatus || !hasValidWorkStationConfig()}
-          className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
-          title={!hasValidWorkStationConfig() ? "No work location assigned" : "Clock in to start your shift"}
-        >
-          <Play className="w-4 h-4" />
-          <span className="text-sm">
-            {!hasValidWorkStationConfig() 
-              ? "Location Required" 
-              : isClockingIn 
-                ? (isGettingLocation ? "Getting Location..." : "Clocking In...") 
-                : "Clock In"
-            }
-          </span>
-        </button>
-
-        <button
-          onClick={handleRefresh}
-          disabled={isGettingLocation || isLoadingShiftStatus}
-          className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-medium"
-          title="Refresh location and status"
-        >
-          <RefreshCw className={`w-4 h-4 ${isGettingLocation || isLoadingShiftStatus ? "animate-spin" : ""}`} />
-          <span className="text-sm">Refresh</span>
-        </button>
-      </div>
-    )
-  }
-
   return (
     <>
       <div className="w-96 bg-gradient-to-br from-blue-50 to-sky-100 shadow-xl p-6 rounded-2xl border border-blue-200/50">
@@ -811,43 +856,43 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
             {isPermissionBlocked && (
               <Badge variant="destructive" className="gap-2 bg-red-100 text-red-700 border-red-200">
                 <AlertTriangle className="h-3 w-3" />
-                Location Blocked
+                Location Access Blocked
               </Badge>
             )}
 
-            {selectedWorkLocation ? (
-              location && (
-                <Badge 
-                  variant={isWithinRadius ? "secondary" : "destructive"} 
-                  className={cn(
-                    "gap-2",
-                    isWithinRadius 
-                      ? "bg-emerald-100 text-emerald-700 border-emerald-200" 
-                      : "bg-orange-100 text-orange-700 border-orange-200"
-                  )}
-                >
-                  {isWithinRadius ? (
-                    <>
-                      <Building className="h-3 w-3" />
-                      At {selectedWorkLocation.name}
-                    </>
-                  ) : (
-                    <>
-                      <Navigation className="h-3 w-3" />
-                      {calculateDistance(
-                        location.latitude,
-                        location.longitude,
-                        selectedWorkLocation.latitude,
-                        selectedWorkLocation.longitude
-                      ).toFixed(0)}m from {selectedWorkLocation.name}
-                    </>
-                  )}
-                </Badge>
-              )
-            ) : (
+            {!selectedWorkLocation && !isGettingLocation && (
               <Badge variant="outline" className="gap-2">
                 <MapPin className="h-3 w-3" />
-                Select Location
+                Select Work Location
+              </Badge>
+            )}
+
+            {location && selectedWorkLocation && (
+              <Badge 
+                variant={isWithinRadius ? "secondary" : "destructive"} 
+                className={cn(
+                  "gap-2",
+                  isWithinRadius 
+                    ? "bg-emerald-100 text-emerald-700 border-emerald-200" 
+                    : "bg-orange-100 text-orange-700 border-orange-200"
+                )}
+              >
+                {isWithinRadius ? (
+                  <>
+                    <Building className="h-3 w-3" />
+                    At {selectedWorkLocation.name}
+                  </>
+                ) : (
+                  <>
+                    <Navigation className="h-3 w-3" />
+                    {calculateDistance(
+                      location.latitude,
+                      location.longitude,
+                      selectedWorkLocation.latitude,
+                      selectedWorkLocation.longitude
+                    ).toFixed(0)}m from {selectedWorkLocation.name}
+                  </>
+                )}
               </Badge>
             )}
 

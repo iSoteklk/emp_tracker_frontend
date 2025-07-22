@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Check, ChevronsUpDown, MapPin } from "lucide-react"
+import { Check, ChevronsUpDown, MapPin, Building, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,12 +17,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
-import { useLocation } from "@/hooks/use-location"
-
-interface LocationSearchProps {
-  onLocationSelect: (location: WorkLocation) => void
-  className?: string
-}
 
 interface WorkLocation {
   _id: string
@@ -35,28 +29,35 @@ interface WorkLocation {
   updatedAt: string
 }
 
-export function LocationSearch({ onLocationSelect, className }: LocationSearchProps) {
+export interface LocationSearchProps {
+  onLocationSelect: (location: WorkLocation) => void
+  className?: string
+  defaultValue?: WorkLocation | null
+}
+
+export function LocationSearch({ onLocationSelect, className, defaultValue }: LocationSearchProps) {
   const [open, setOpen] = useState(false)
   const [locations, setLocations] = useState<WorkLocation[]>([])
-  const [selectedLocation, setSelectedLocation] = useState<WorkLocation | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [showAll, setShowAll] = useState(false)
+  const [selectedLocation, setSelectedLocation] = useState<WorkLocation | null>(defaultValue || null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const { location: userLocation, geofenceResult } = useLocation()
-
+  // Fetch locations when component mounts
   useEffect(() => {
     fetchLocations()
   }, [])
 
-  const fetchLocations = async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
+  useEffect(() => {
+    // Update selected location when defaultValue changes
+    setSelectedLocation(defaultValue || null)
+  }, [defaultValue])
 
+  const fetchLocations = async () => {
+    setIsLoading(true)
+    try {
       const token = localStorage.getItem("token")
       if (!token) {
-        throw new Error("No authentication token found")
+        console.error("No token found")
+        return
       }
 
       const response = await fetch("/api/work-locations/getall", {
@@ -67,20 +68,19 @@ export function LocationSearch({ onLocationSelect, className }: LocationSearchPr
         },
       })
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch locations: ${response.status}`)
-      }
-
       const data = await response.json()
-      
-      if (data.success === "true" && data.data && data.data.data) {
+      console.log("Locations response:", data) // Debug log
+
+      if (response.ok && data.success === "true" && data.data && Array.isArray(data.data.data)) {
         setLocations(data.data.data)
+        console.log("Loaded locations:", data.data.data) // Debug log
       } else {
-        throw new Error("Invalid response format")
+        console.error("Failed to fetch locations:", data)
+        setLocations([]) // Reset locations on error
       }
     } catch (error) {
       console.error("Error fetching locations:", error)
-      setError(error instanceof Error ? error.message : "Failed to fetch locations")
+      setLocations([]) // Reset locations on error
     } finally {
       setIsLoading(false)
     }
@@ -88,65 +88,9 @@ export function LocationSearch({ onLocationSelect, className }: LocationSearchPr
 
   const handleSelect = (location: WorkLocation) => {
     setSelectedLocation(location)
-    setOpen(false)
-
-    // Update workStationConfig with selected location
-    const config = {
-      mainOffice: {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        radius: location.radius,
-        address: location.address,
-        name: location.name,
-      }
-    }
-
-    // Save to localStorage
-    if (typeof window !== "undefined") {
-      localStorage.setItem("workStationConfig", JSON.stringify(config))
-      
-      // Dispatch event to notify other components
-      window.dispatchEvent(new StorageEvent("storage", {
-        key: "workStationConfig",
-        newValue: JSON.stringify(config),
-        storageArea: localStorage
-      }))
-      window.dispatchEvent(new CustomEvent("workStationConfigUpdated"))
-    }
-
     onLocationSelect(location)
+    setOpen(false)
   }
-
-  const getLocationStatus = (location: WorkLocation) => {
-    if (!userLocation) return null
-
-    const distance = calculateDistance(
-      userLocation.latitude,
-      userLocation.longitude,
-      location.latitude,
-      location.longitude
-    )
-
-    const isWithin = distance <= location.radius
-
-    return {
-      isWithin,
-      distance: Math.round(distance),
-    }
-  }
-
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371000 // Earth's radius in meters
-    const dLat = ((lat2 - lat1) * Math.PI) / 180
-    const dLon = ((lon2 - lon1) * Math.PI) / 180
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    return R * c // Distance in meters
-  }
-
-  const displayedLocations = showAll ? locations : locations.slice(0, 3)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -156,77 +100,69 @@ export function LocationSearch({ onLocationSelect, className }: LocationSearchPr
           role="combobox"
           aria-expanded={open}
           className={cn("w-full justify-between", className)}
-          disabled={isLoading}
+          onClick={() => {
+            setOpen(!open)
+            if (!open) {
+              fetchLocations()
+            }
+          }}
         >
           {selectedLocation ? (
-            <div className="flex items-center gap-2 truncate">
-              <MapPin className="h-4 w-4 shrink-0" />
-              <span className="truncate">{selectedLocation.name}</span>
-            </div>
+            <>
+              <Building className="mr-2 h-4 w-4" />
+              {selectedLocation.name}
+            </>
           ) : (
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4" />
-              <span>{isLoading ? "Loading locations..." : "Select location"}</span>
-            </div>
+            <>
+              <MapPin className="mr-2 h-4 w-4" />
+              Select work location...
+            </>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0">
+      <PopoverContent className="w-full p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search locations..." />
-          <CommandEmpty>No locations found.</CommandEmpty>
-          <CommandGroup className="max-h-[180px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent hover:scrollbar-thumb-gray-300">
-            {displayedLocations.map((location) => {
-              const status = getLocationStatus(location)
-              return (
+          <CommandInput placeholder="Search work locations..." />
+          <CommandEmpty>
+            {locations.length === 0 ? (
+              <div className="p-4 text-sm text-center text-gray-500">
+                No work locations available. Please contact your administrator.
+              </div>
+            ) : (
+              <div className="p-4 text-sm text-center text-gray-500">
+                No location found with that name.
+              </div>
+            )}
+          </CommandEmpty>
+          <CommandGroup>
+            {isLoading ? (
+              <CommandItem disabled>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading work locations...
+              </CommandItem>
+            ) : locations.length === 0 ? (
+              <CommandItem disabled>
+                <MapPin className="mr-2 h-4 w-4 text-gray-400" />
+                No locations available
+              </CommandItem>
+            ) : (
+              locations.map((location) => (
                 <CommandItem
                   key={location._id}
-                  value={location.name}
+                  value={location._id}
                   onSelect={() => handleSelect(location)}
-                  className="flex flex-col items-start py-3 border-b last:border-b-0 border-gray-100"
                 >
-                  <div className="flex items-center w-full">
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        selectedLocation?._id === location._id ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <div className="flex-1">
-                      <div className="font-medium">{location.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {location.address}
-                      </div>
-                    </div>
-                  </div>
-                  {status && (
-                    <div className="ml-6 mt-1">
-                      <Badge
-                        variant={status.isWithin ? "secondary" : "outline"}
-                        className={cn(
-                          "text-xs",
-                          status.isWithin
-                            ? "bg-green-100 text-green-800"
-                            : "text-orange-800"
-                        )}
-                      >
-                        {status.isWithin
-                          ? "You are here"
-                          : `${status.distance}m away`}
-                      </Badge>
-                    </div>
-                  )}
+                  <Building className="mr-2 h-4 w-4" />
+                  {location.name}
+                  <Check
+                    className={cn(
+                      "ml-auto h-4 w-4",
+                      selectedLocation?._id === location._id ? "opacity-100" : "opacity-0"
+                    )}
+                  />
                 </CommandItem>
-              )
-            })}
-            {!showAll && locations.length > 3 && (
-              <CommandItem
-                onSelect={() => setShowAll(true)}
-                className="py-2 text-sm text-blue-600 hover:text-blue-800 text-center cursor-pointer"
-              >
-                Show {locations.length - 3} more locations...
-              </CommandItem>
+              ))
             )}
           </CommandGroup>
         </Command>
