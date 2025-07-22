@@ -2,20 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import {
-  Home,
-  Settings,
-  Users,
-  BarChart3,
-  FileText,
-  Calendar,
-  Clock,
-  MapPin,
-  Shield,
-  User,
-  LogOut,
-  UserPlus,
-} from "lucide-react"
+import { Home, Settings, Users, FileText, Calendar, Clock, MapPin, Shield, User, LogOut, UserPlus } from "lucide-react"
 
 import {
   Sidebar,
@@ -67,6 +54,11 @@ const employeeNavigationItems = [
     title: "Dashboard",
     url: "/dashboard",
     icon: Home,
+  },
+  {
+    title: "Leave Requests",
+    url: "/leave",
+    icon: Calendar,
   },
   {
     title: "Time Tracking",
