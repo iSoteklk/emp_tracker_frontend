@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Card, CardContent } from "@/components/ui/card"
 import { LeaveRequestForm } from "./leave-request-form"
 
 interface LeaveRequest {
@@ -79,11 +80,11 @@ export function LeaveRequestsList({ requests, loading, onUpdateSuccess }: LeaveR
 
   if (requests.length === 0) {
     return (
-      <div className="text-center py-8">
+      <div className="text-center py-8 px-4">
         <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h3 className="text-lg font-medium text-muted-foreground mb-2">No leave requests found</h3>
         <p className="text-sm text-muted-foreground">
-          You haven't submitted any leave requests yet. Click "New Leave Request" to get started.
+          You haven't submitted any leave requests yet. Click "New Request" to get started.
         </p>
       </div>
     )
@@ -91,7 +92,71 @@ export function LeaveRequestsList({ requests, loading, onUpdateSuccess }: LeaveR
 
   return (
     <>
-      <div className="rounded-md border">
+      {/* Mobile Card Layout */}
+      <div className="block md:hidden space-y-4 p-4">
+        {requests.map((request) => (
+          <Card key={request.id} className="border border-slate-200">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold text-slate-900">{formatLeaveType(request.leaveType)}</h3>
+                  <p className="text-sm text-slate-600">
+                    {format(new Date(request.startDate), "MMM dd")} -{" "}
+                    {format(new Date(request.endDate), "MMM dd, yyyy")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
+                    {request.totalDays} {request.totalDays === 1 ? "day" : "days"}
+                  </Badge>
+                  {(request.status || "pending") === "pending" && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setEditingRequest(request)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit Request
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Reason:</p>
+                  <p className="text-sm text-slate-600">{request.reason}</p>
+                </div>
+
+                {request.comments && (
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Comments:</p>
+                    <p className="text-sm text-slate-600">{request.comments}</p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-2">
+                  <Badge className={`${getStatusColor(request.status || "pending")} flex items-center gap-1`}>
+                    {getStatusIcon(request.status || "pending")}
+                    {(request.status || "pending").charAt(0).toUpperCase() + (request.status || "pending").slice(1)}
+                  </Badge>
+                  <p className="text-xs text-slate-500">
+                    Submitted {format(new Date(request.createdAt), "MMM dd, yyyy")}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Desktop Table Layout */}
+      <div className="hidden md:block rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>

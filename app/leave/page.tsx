@@ -100,12 +100,13 @@ function LeavePageContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="p-4 md:p-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
           <div className="flex items-center gap-4">
             <SidebarTrigger />
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">
                 Leave Management
               </h1>
               <p className="text-sm text-muted-foreground">Manage your leave requests and track their status</p>
@@ -113,58 +114,58 @@ function LeavePageContent() {
           </div>
           <Button
             onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
-            New Leave Request
+            New Request
           </Button>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        {/* Stats Cards - Mobile Responsive Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-6">
           <Card className="bg-white/80 border-blue-100">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Calendar className="h-8 w-8 text-blue-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Total Requests</p>
-                  <p className="text-2xl font-bold text-slate-800">{stats.totalRequests}</p>
+            <CardContent className="p-4 md:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <Calendar className="h-6 w-6 md:h-8 md:w-8 text-blue-600 mx-auto sm:mx-0" />
+                <div className="text-center sm:text-left">
+                  <p className="text-xs md:text-sm font-medium text-slate-600">Total</p>
+                  <p className="text-xl md:text-2xl font-bold text-slate-800">{stats.totalRequests}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-white/80 border-blue-100">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Clock className="h-8 w-8 text-yellow-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Pending</p>
-                  <p className="text-2xl font-bold text-slate-800">{stats.pendingRequests}</p>
+            <CardContent className="p-4 md:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <Clock className="h-6 w-6 md:h-8 md:w-8 text-yellow-600 mx-auto sm:mx-0" />
+                <div className="text-center sm:text-left">
+                  <p className="text-xs md:text-sm font-medium text-slate-600">Pending</p>
+                  <p className="text-xl md:text-2xl font-bold text-slate-800">{stats.pendingRequests}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-white/80 border-blue-100">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <CheckCircle className="h-8 w-8 text-green-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Approved</p>
-                  <p className="text-2xl font-bold text-slate-800">{stats.approvedRequests}</p>
+            <CardContent className="p-4 md:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <CheckCircle className="h-6 w-6 md:h-8 md:w-8 text-green-600 mx-auto sm:mx-0" />
+                <div className="text-center sm:text-left">
+                  <p className="text-xs md:text-sm font-medium text-slate-600">Approved</p>
+                  <p className="text-xl md:text-2xl font-bold text-slate-800">{stats.approvedRequests}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-white/80 border-blue-100">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <XCircle className="h-8 w-8 text-red-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Rejected</p>
-                  <p className="text-2xl font-bold text-slate-800">{stats.rejectedRequests}</p>
+            <CardContent className="p-4 md:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <XCircle className="h-6 w-6 md:h-8 md:w-8 text-red-600 mx-auto sm:mx-0" />
+                <div className="text-center sm:text-left">
+                  <p className="text-xs md:text-sm font-medium text-slate-600">Rejected</p>
+                  <p className="text-xl md:text-2xl font-bold text-slate-800">{stats.rejectedRequests}</p>
                 </div>
               </div>
             </CardContent>
@@ -173,10 +174,10 @@ function LeavePageContent() {
 
         {/* Leave Requests List */}
         <Card className="bg-white/80 border-blue-100">
-          <CardHeader>
-            <CardTitle className="text-blue-700">My Leave Requests</CardTitle>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-blue-700 text-lg md:text-xl">My Leave Requests</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0 md:p-6 md:pt-0">
             <LeaveRequestsList requests={leaveRequests} loading={loading} onUpdateSuccess={handleUpdateSuccess} />
           </CardContent>
         </Card>

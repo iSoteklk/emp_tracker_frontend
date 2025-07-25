@@ -42,9 +42,9 @@ const adminNavigationItems = [
     icon: MapPin,
   },
   {
-    title: "Employee Management",
-    url: "/admin/employees",
-    icon: Users,
+    title: "Leave Management",
+    url: "/admin/leave-management",
+    icon: Calendar,
   },
 ]
 
@@ -60,21 +60,7 @@ const employeeNavigationItems = [
     url: "/leave",
     icon: Calendar,
   },
-  {
-    title: "Time Tracking",
-    url: "/dashboard/time",
-    icon: Clock,
-  },
-  {
-    title: "My Schedule",
-    url: "/dashboard/schedule",
-    icon: Calendar,
-  },
-  {
-    title: "Work Logs",
-    url: "/dashboard/logs",
-    icon: FileText,
-  },
+
 ]
 
 // Common navigation items (available to both roles)

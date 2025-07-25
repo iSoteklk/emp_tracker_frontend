@@ -310,31 +310,31 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
     switch (status) {
       case "On Time":
         return (
-          <Badge variant="secondary" className="bg-green-100 text-green-800">
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-300">
             On Time
           </Badge>
         )
       case "Late":
-        return <Badge variant="destructive">Late</Badge>
+        return <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-300">Late</Badge>
       case "Working":
         return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+          <Badge variant="secondary" className="bg-sky-100 text-sky-800 border-sky-300">
             Working
           </Badge>
         )
       case "Weekend":
-        return <Badge variant="outline">Weekend</Badge>
+        return <Badge variant="outline" className="border-blue-300 text-blue-700">Weekend</Badge>
       default:
-        return <Badge variant="outline">{status}</Badge>
+        return <Badge variant="outline" className="border-blue-300 text-blue-700">{status}</Badge>
     }
   }
 
   const getOvertimeBadge = (overtime: string) => {
     if (overtime === "0m") {
-      return <span className="text-gray-500">-</span>
+      return <span className="text-blue-400">-</span>
     }
     return (
-      <Badge variant="secondary" className="bg-green-100 text-green-800">
+      <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-300">
         {overtime}
       </Badge>
     )
@@ -378,11 +378,11 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Card>
+        <Card className="">
           <CardContent className="p-6">
             <div className="flex items-center justify-center py-8">
               <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
-              <span className="text-slate-600">Loading work log data...</span>
+              <span className="text-blue-700">Loading work log data...</span>
             </div>
           </CardContent>
         </Card>
@@ -393,15 +393,16 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
   if (error) {
     return (
       <div className="space-y-6">
-        <Card>
+        <Card className="">
           <CardContent className="p-6">
             <div className="text-center py-8">
               <div className="text-red-600 mb-2">Failed to load work log data</div>
-              <div className="text-sm text-gray-500 mb-4">{error}</div>
+              <div className="text-sm text-blue-600 mb-4">{error}</div>
               <Button 
                 onClick={() => fetchWorkLogData(dateRange)}
                 variant="outline"
                 size="sm"
+                className="border-blue-300 text-blue-700 hover:bg-blue-50"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
@@ -415,17 +416,17 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
+      <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-sky-50">
+        <CardHeader className="">
           <div className="flex flex-col space-y-4 md:flex-row md:justify-between md:items-center md:space-y-0">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-black">
+                <Calendar className="h-5 w-5 text-black" />
                 {selectedPeriod === "today" ? "Today's Work Log" : 
                  selectedPeriod === "yesterday" ? "Yesterday's Work Log" :
                  "Work Log History"}
               </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-sm text-blue-600 mt-1">
                 {getDateRangeTitle()}
               </p>
             </div>
@@ -437,7 +438,7 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
                   onClick={navigateToToday}
                   variant={selectedPeriod === "today" ? "default" : "outline"}
                   size="sm"
-                  className="flex-1 md:flex-initial"
+                  className={selectedPeriod === "today" ? "bg-blue-600 hover:bg-blue-700 text-white flex-1 md:flex-initial" : "border-blue-300 text-blue-700 hover:bg-blue-50 flex-1 md:flex-initial"}
                 >
                   Today
                 </Button>
@@ -445,7 +446,7 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
                   onClick={navigateToYesterday}
                   variant={selectedPeriod === "yesterday" ? "default" : "outline"}
                   size="sm"
-                  className="flex-1 md:flex-initial"
+                  className={selectedPeriod === "yesterday" ? "bg-blue-600 hover:bg-blue-700 text-white flex-1 md:flex-initial" : "border-blue-300 text-blue-700 hover:bg-blue-50 flex-1 md:flex-initial"}
                 >
                   Yesterday
                 </Button>
@@ -454,7 +455,7 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
               {/* Controls row */}
               <div className="flex items-center gap-2">
                 <Select onValueChange={handlePeriodChange} value={selectedPeriod}>
-                  <SelectTrigger className="w-full md:w-[180px]">
+                  <SelectTrigger className="flex-1 md:w-[180px] border-blue-300 text-blue-700">
                     <SelectValue placeholder="Select a period" />
                   </SelectTrigger>
                   <SelectContent>
@@ -470,22 +471,22 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
                   variant="outline"
                   size="sm"
                   disabled={isLoading}
-                  className="shrink-0"
+                  className="px-3 md:px-4 border-blue-300 text-blue-700 hover:bg-blue-50"
                 >
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''} md:mr-2`} />
-                  <span className="hidden md:inline">Refresh</span>
+                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  <span className="hidden md:inline ml-2">Refresh</span>
                 </Button>
               </div>
               
               {/* Total hours display */}
               {workLogData.length > 0 && (
-                <div className="text-center md:text-right border-t pt-3 md:border-t-0 md:pt-0">
-                  <div className="text-sm text-muted-foreground">Total Hours</div>
-                  <div className="text-xl font-bold">
+                <div className="text-center md:text-right border-t border-blue-200 pt-3 md:border-t-0 md:pt-0 w-full md:w-auto">
+                  <div className="text-sm text-blue-600">Total Hours</div>
+                  <div className="text-xl font-bold text-blue-800">
                     {Math.floor(totalWeeklyHours)}h {Math.round((totalWeeklyHours % 1) * 60)}m
                   </div>
                   {totalOvertime > 0 && (
-                    <div className="text-sm text-green-600">
+                    <div className="text-sm text-blue-600">
                       Overtime: {Math.floor(totalOvertime)}h {Math.round((totalOvertime % 1) * 60)}m
                     </div>
                   )}
@@ -494,41 +495,41 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="bg-white/80">
           {selectedPeriod === "custom" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <Label htmlFor="customStartDate" className="text-sm">Start Date</Label>
+                <Label htmlFor="customStartDate" className="text-sm text-blue-700">Start Date</Label>
                 <Input
                   id="customStartDate"
                   type="date"
                   name="startDate"
                   value={customStartDate}
                   onChange={handleCustomDateChange}
-                  className="w-full"
+                  className="w-full border-blue-300 focus:border-blue-500"
                 />
               </div>
               <div>
-                <Label htmlFor="customEndDate" className="text-sm">End Date</Label>
+                <Label htmlFor="customEndDate" className="text-sm text-blue-700">End Date</Label>
                 <Input
                   id="customEndDate"
                   type="date"
                   name="endDate"
                   value={customEndDate}
                   onChange={handleCustomDateChange}
-                  className="w-full"
+                  className="w-full border-blue-300 focus:border-blue-500"
                 />
               </div>
-              <Button onClick={handleApplyCustomDates} className="md:col-span-2">
+              <Button onClick={handleApplyCustomDates} className="md:col-span-2 bg-blue-600 hover:bg-blue-700 text-white">
                 Apply Custom Dates
               </Button>
             </div>
           )}
           {workLogData.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">
-              <Calendar className="h-12 w-12 mx-auto mb-2 text-slate-300" />
-              <p>No work log entries found for this date range</p>
-              <p className="text-sm">Try selecting a different period or date range</p>
+            <div className="text-center py-8 text-blue-500">
+              <Calendar className="h-12 w-12 mx-auto mb-2 text-blue-300" />
+              <p className="text-blue-700">No work log entries found for this date range</p>
+              <p className="text-sm text-blue-600">Try selecting a different period or date range</p>
             </div>
           ) : (
             <>
@@ -536,32 +537,32 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
               <div className="hidden md:block">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Day</TableHead>
-                      <TableHead>Start Time</TableHead>
-                      <TableHead>End Time</TableHead>
-                      <TableHead>Total Hours</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Overtime</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Notes</TableHead>
+                    <TableRow className="border-blue-200">
+                      <TableHead className="text-black font-semibold">Date</TableHead>
+                      <TableHead className="text-black font-semibold">Day</TableHead>
+                      <TableHead className="text-black font-semibold">Start Time</TableHead>
+                      <TableHead className="text-black font-semibold">End Time</TableHead>
+                      <TableHead className="text-black font-semibold">Total Hours</TableHead>
+                      <TableHead className="text-black font-semibold">Status</TableHead>
+                      <TableHead className="text-black font-semibold">Overtime</TableHead>
+                      <TableHead className="text-black font-semibold">Location</TableHead>
+                      <TableHead className="text-black font-semibold">Notes</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {workLogData.map((log, index) => (
-                      <TableRow key={index} className="hover:bg-gray-50">
-                        <TableCell className="font-medium">{log.date}</TableCell>
-                        <TableCell>{log.day}</TableCell>
-                        <TableCell>{log.startTime}</TableCell>
-                        <TableCell>{log.endTime}</TableCell>
-                        <TableCell className="font-medium">{log.totalHours}</TableCell>
+                      <TableRow key={index} className="hover:bg-blue-50 border-blue-100">
+                        <TableCell className="font-medium text-blue-800">{log.date}</TableCell>
+                        <TableCell className="text-blue-700">{log.day}</TableCell>
+                        <TableCell className="text-blue-700">{log.startTime}</TableCell>
+                        <TableCell className="text-blue-700">{log.endTime}</TableCell>
+                        <TableCell className="font-medium text-blue-800">{log.totalHours}</TableCell>
                         <TableCell>{getStatusBadge(log.status)}</TableCell>
                         <TableCell>{getOvertimeBadge(log.overtime)}</TableCell>
-                        <TableCell className="max-w-xs truncate" title={log.location}>
+                        <TableCell className="max-w-xs truncate text-blue-600" title={log.location}>
                           {log.location}
                         </TableCell>
-                        <TableCell className="max-w-xs truncate" title={log.notes}>
+                        <TableCell className="max-w-xs truncate text-blue-600" title={log.notes}>
                           {log.notes || "-"}
                         </TableCell>
                       </TableRow>
@@ -573,43 +574,43 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
               {/* Mobile Card View */}
               <div className="md:hidden space-y-4">
                 {workLogData.map((log, index) => (
-                  <div key={index} className="bg-white border rounded-lg p-4 shadow-sm">
+                  <div key={index} className="bg-white border border-blue-200 rounded-lg p-4 shadow-sm">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <div className="font-semibold text-lg">{log.day}</div>
-                        <div className="text-sm text-muted-foreground">{log.date}</div>
+                        <div className="font-semibold text-lg text-black">{log.day}</div>
+                        <div className="text-sm text-black">{log.date}</div>
                       </div>
                       <div className="text-right">{getStatusBadge(log.status)}</div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 text-sm mb-3">
                       <div>
-                        <div className="text-muted-foreground">Start Time</div>
-                        <div className="font-medium">{log.startTime}</div>
+                        <div className="text-black">Start Time</div>
+                        <div className="font-medium text-black">{log.startTime}</div>
                       </div>
                       <div>
-                        <div className="text-muted-foreground">End Time</div>
-                        <div className="font-medium">{log.endTime}</div>
+                        <div className="text-black">End Time</div>
+                        <div className="font-medium text-black">{log.endTime}</div>
                       </div>
                       <div>
-                        <div className="text-muted-foreground">Total Hours</div>
-                        <div className="font-semibold text-blue-600">{log.totalHours}</div>
+                        <div className="text-black">Total Hours</div>
+                        <div className="font-semibold text-black">{log.totalHours}</div>
                       </div>
                       <div>
-                        <div className="text-muted-foreground">Overtime</div>
+                        <div className="text-black">Overtime</div>
                         <div>{getOvertimeBadge(log.overtime)}</div>
                       </div>
                     </div>
 
                     <div className="space-y-2 text-sm">
                       <div>
-                        <div className="text-muted-foreground">Location</div>
-                        <div className="font-medium">{log.location}</div>
+                        <div className="text-blue-600">Location</div>
+                        <div className="font-medium text-black">{log.location}</div>
                       </div>
                       {log.notes && (
                         <div>
-                          <div className="text-muted-foreground">Notes</div>
-                          <div className="font-medium">{log.notes}</div>
+                          <div className="text-black">Notes</div>
+                          <div className="font-medium text-black">{log.notes}</div>
                         </div>
                       )}
                     </div>
@@ -623,43 +624,43 @@ export function WorkLogTable({ selectedDate }: WorkLogTableProps) {
 
       {/* Summary Cards - Only show if we have data */}
       {workLogData.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-sky-50">
+            <CardContent className="p-3">
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{totalDaysWorked}</div>
-                <div className="text-sm text-muted-foreground">Days Worked</div>
+                <div className="text-xl font-bold text-blue-700">{totalDaysWorked}</div>
+                <div className="text-xs text-black">Days Worked</div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
+          <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-sky-50">
+            <CardContent className="p-3">
               <div className="text-center">
-                <div className="text-2xl font-bold text-red-600">{lateDays}</div>
-                <div className="text-sm text-muted-foreground">Late Days</div>
+                <div className="text-xl font-bold text-red-600">{lateDays}</div>
+                <div className="text-xs text-black">Late Days</div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
+          <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-sky-50">
+            <CardContent className="p-3">
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-xl font-bold text-blue-700">
                   {Math.floor(totalOvertime)}h {Math.round((totalOvertime % 1) * 60)}m
                 </div>
-                <div className="text-sm text-muted-foreground">Total Overtime</div>
+                <div className="text-xs text-black">Total Overtime</div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
+          <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-sky-50">
+            <CardContent className="p-3">
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">
+                <div className="text-xl font-bold text-blue-700">
                   {averageHoursPerDay.toFixed(1)}h
                 </div>
-                <div className="text-sm text-muted-foreground">Average Hours/Day</div>
+                <div className="text-xs text-black">Average Hours/Day</div>
               </div>
             </CardContent>
           </Card>
