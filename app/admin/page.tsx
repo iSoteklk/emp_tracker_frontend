@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { AuthGuard } from "@/components/auth-guard"
 import { EmployeeTable } from "@/components/admin/employee-table"
 import { FullScreenCalendar } from "@/components/ui/fullscreen-calendar"
-import { LogOut, Users, Clock, Calendar, BarChart3 } from "lucide-react"
+import { LogOut, Users, Clock, Calendar, BarChart3, Plane } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 function AdminDashboardContent() {
@@ -17,6 +17,7 @@ function AdminDashboardContent() {
   const [summaryStats, setSummaryStats] = useState({
     totalEmployees: 0,
     activeEmployees: 0,
+    leaveEmployees: 0,
     lateEmployees: 0,
     totalHoursToday: 0,
   })
@@ -88,10 +89,33 @@ function AdminDashboardContent() {
         }
       }
 
+      // Fetch today's leave data
+      const leaveResponse = await fetch("/api/leave/all", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      let leaveToday = 0
+      if (leaveResponse.ok) {
+        const leaveData = await leaveResponse.json()
+        if (leaveData.success === "true" && leaveData.data) {
+          const todayDate = new Date(today)
+          leaveToday = leaveData.data.filter((leave: any) => {
+            const startDate = new Date(leave.startDate)
+            const endDate = new Date(leave.endDate)
+            return todayDate >= startDate && todayDate <= endDate
+          }).length
+        }
+      }
+
       setSummaryStats((prev) => ({
         ...prev,
         totalEmployees,
         activeEmployees: activeToday,
+        leaveEmployees: leaveToday,
       }))
     } catch (error) {
       console.error("Error fetching dashboard stats:", error)
@@ -113,11 +137,12 @@ function AdminDashboardContent() {
     router.push("/login")
   }
 
-  const handleAttendanceUpdate = (totalEmployees: number, activeToday: number) => {
+  const handleAttendanceUpdate = (totalEmployees: number, activeToday: number, leaveToday: number) => {
     setSummaryStats((prev) => ({
       ...prev,
       totalEmployees,
       activeEmployees: activeToday,
+      leaveEmployees: leaveToday,
     }))
   }
 
@@ -204,112 +229,133 @@ function AdminDashboardContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-blue-100">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <SidebarTrigger />
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">
-                Admin Dashboard
-              </h1>
-              <p className="text-sm text-slate-600">Welcome back, {user.name}</p>
+      <div className="w-full max-w-full overflow-x-hidden">
+        <div className="px-3 py-4 md:p-6">
+          {/* Header */}
+          <div className="flex flex-col space-y-3 md:flex-row md:items-center md:justify-between md:space-y-0 mb-4 md:mb-6">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-4">
+                <SidebarTrigger />
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-bold text-blue-700 truncate">Admin Dashboard</h1>
+                  <p className="text-sm md:text-base text-slate-600 truncate">Welcome back, {user.name}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={handleLogout}
+                className="w-full md:w-auto border-blue-300 text-blue-700 hover:bg-blue-50"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden md:inline ml-2">Logout</span>
+              </Button>
             </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={handleLogout}
-            className="flex items-center gap-2 bg-white/80 border-blue-200 text-blue-700 hover:bg-blue-50"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
+
+          {/* Summary Cards - Optimized for mobile */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-6 mb-4 md:mb-6">
+            <Card className="bg-white/90 border-blue-100 shadow-sm">
+              <CardContent className="p-3 md:p-4">
+                <div className="flex flex-col items-center space-y-1 md:flex-row md:space-y-0 md:space-x-3">
+                  <Users className="h-5 w-5 md:h-8 md:w-8 text-blue-600" />
+                  <div className="text-center md:text-left">
+                    <p className="text-xs md:text-sm font-medium text-blue-600">Total</p>
+                    <p className="text-base md:text-2xl font-bold text-blue-800">
+                      {loading ? (
+                        <div className="animate-pulse bg-slate-200 h-6 w-8 rounded"></div>
+                      ) : (
+                        summaryStats.totalEmployees
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/90 border-green-100 shadow-sm">
+              <CardContent className="p-3 md:p-4">
+                <div className="flex flex-col items-center space-y-1 md:flex-row md:space-y-0 md:space-x-3">
+                  <Clock className="h-5 w-5 md:h-8 md:w-8 text-green-600" />
+                  <div className="text-center md:text-left">
+                    <p className="text-xs md:text-sm font-medium text-green-600">Active</p>
+                    <p className="text-base md:text-2xl font-bold text-green-800">
+                      {loading ? (
+                        <div className="animate-pulse bg-slate-200 h-6 w-8 rounded"></div>
+                      ) : (
+                        summaryStats.activeEmployees
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/90 border-yellow-100 shadow-sm">
+              <CardContent className="p-3 md:p-4">
+                <div className="flex flex-col items-center space-y-1 md:flex-row md:space-y-0 md:space-x-3">
+                  <Plane className="h-5 w-5 md:h-8 md:w-8 text-yellow-600" />
+                  <div className="text-center md:text-left">
+                    <p className="text-xs md:text-sm font-medium text-yellow-600">On Leave</p>
+                    <p className="text-base md:text-2xl font-bold text-yellow-800">
+                      {loading ? (
+                        <div className="animate-pulse bg-slate-200 h-6 w-8 rounded"></div>
+                      ) : (
+                        summaryStats.leaveEmployees
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/90 border-red-100 shadow-sm">
+              <CardContent className="p-3 md:p-4">
+                <div className="flex flex-col items-center space-y-1 md:flex-row md:space-y-0 md:space-x-3">
+                  <Calendar className="h-5 w-5 md:h-8 md:w-8 text-red-600" />
+                  <div className="text-center md:text-left">
+                    <p className="text-xs md:text-sm font-medium text-red-600">Late</p>
+                    <p className="text-base md:text-2xl font-bold text-red-800">{summaryStats.lateEmployees}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            
+          </div>
+
+          {/* Employee Table Component - Mobile optimized */}
+          <div className="mb-4 md:mb-6">
+            <Card className="bg-white/90 border-blue-100 shadow-sm">
+              <CardContent className="p-0 md:p-4">
+                <div className="w-full overflow-x-auto">
+                  <EmployeeTable onRefresh={handleRefreshStats} onAttendanceUpdate={handleAttendanceUpdate} />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Employee Schedule Calendar - Mobile optimized */}
+          <Card className="bg-white/90 border-blue-100 shadow-sm">
+            <CardContent className="p-3 md:p-6">
+              <div className="mb-3 md:mb-4">
+                <h3 className="text-base md:text-xl font-semibold text-blue-700">Employee Schedule Calendar</h3>
+                <p className="text-xs md:text-sm text-slate-600">Click on any date to view employee attendance details</p>
+              </div>
+              <div className="h-[300px] md:h-[600px] w-full overflow-hidden rounded-lg border">
+                <div className="w-full h-full overflow-auto">
+                  <FullScreenCalendar
+                    data={employeeScheduleData}
+                    onDateClick={(date) => {
+                      console.log("Date clicked:", date)
+                    }}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <Card className="bg-white/80 border-blue-100">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Users className="h-8 w-8 text-blue-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Total Employees</p>
-                  <p className="text-2xl font-bold text-slate-800">
-                    {loading ? (
-                      <div className="animate-pulse bg-slate-200 h-8 w-12 rounded"></div>
-                    ) : (
-                      summaryStats.totalEmployees
-                    )}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 border-blue-100">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Clock className="h-8 w-8 text-green-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Active Today</p>
-                  <p className="text-2xl font-bold text-slate-800">
-                    {loading ? (
-                      <div className="animate-pulse bg-slate-200 h-8 w-12 rounded"></div>
-                    ) : (
-                      summaryStats.activeEmployees
-                    )}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 border-blue-100">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Calendar className="h-8 w-8 text-red-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Late Today</p>
-                  <p className="text-2xl font-bold text-slate-800">{summaryStats.lateEmployees}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 border-blue-100">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <BarChart3 className="h-8 w-8 text-purple-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Total Hours Today</p>
-                  <p className="text-2xl font-bold text-slate-800">{summaryStats.totalHoursToday}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Employee Table Component */}
-        <div className="mb-6">
-          <EmployeeTable onRefresh={handleRefreshStats} onAttendanceUpdate={handleAttendanceUpdate} />
-        </div>
-
-        {/* Employee Schedule Calendar */}
-        <Card className="bg-white/80 border-blue-100">
-          <CardContent className="p-6">
-            <div className="mb-4">
-              <h3 className="text-xl font-semibold text-blue-700">Employee Schedule Calendar</h3>
-              <p className="text-sm text-slate-600">Click on any date to view employee attendance details</p>
-            </div>
-            <div className="h-[600px]">
-              <FullScreenCalendar
-                data={employeeScheduleData}
-                onDateClick={(date) => {
-                  console.log("Date clicked:", date)
-                }}
-              />
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )
