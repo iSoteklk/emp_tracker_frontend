@@ -86,10 +86,13 @@ export function LocationSearch({ onLocationSelect, className, defaultValue }: Lo
     }
   }
 
-  const handleSelect = (location: WorkLocation) => {
-    setSelectedLocation(location)
-    onLocationSelect(location)
-    setOpen(false)
+  const handleSelect = (locationId: string) => {
+    const location = locations.find(loc => loc._id === locationId)
+    if (location) {
+      setSelectedLocation(location)
+      onLocationSelect(location)
+      setOpen(false)
+    }
   }
 
   return (
@@ -150,14 +153,18 @@ export function LocationSearch({ onLocationSelect, className, defaultValue }: Lo
               locations.map((location) => (
                 <CommandItem
                   key={location._id}
-                  value={location._id}
-                  onSelect={() => handleSelect(location)}
+                  value={`${location.name} ${location.address}`}
+                  onSelect={() => handleSelect(location._id)}
+                  className="flex items-center gap-2"
                 >
-                  <Building className="mr-2 h-4 w-4" />
-                  {location.name}
+                  <Building className="h-4 w-4 text-slate-500" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-900">{location.name}</div>
+                    <div className="text-xs text-slate-500 truncate">{location.address}</div>
+                  </div>
                   <Check
                     className={cn(
-                      "ml-auto h-4 w-4",
+                      "h-4 w-4 text-blue-600",
                       selectedLocation?._id === location._id ? "opacity-100" : "opacity-0"
                     )}
                   />

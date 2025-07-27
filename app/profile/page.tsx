@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AuthGuard } from "@/components/auth-guard"
 import {
   User,
@@ -19,6 +22,11 @@ import {
   Building,
   UserCheck,
   Settings,
+  Eye,
+  EyeOff,
+  Lock,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react"
 
 interface UserProfile {
@@ -32,10 +40,27 @@ interface UserProfile {
   updatedAt: string
 }
 
+interface PasswordChangeResponse {
+  success: string
+  message: string
+}
+
 function ProfileContent() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Password change state
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
 
   const fetchProfile = async () => {
     try {
@@ -81,6 +106,104 @@ function ProfileContent() {
 
   const handleRefresh = () => {
     fetchProfile()
+  }
+
+  const handlePasswordChangeClick = () => {
+    setShowPasswordDialog(true)
+    setCurrentPassword("")
+    setNewPassword("")
+    setConfirmPassword("")
+    setPasswordError(null)
+    setPasswordSuccess(null)
+  }
+
+  const handlePasswordChangeCancel = () => {
+    setShowPasswordDialog(false)
+    setCurrentPassword("")
+    setNewPassword("")
+    setConfirmPassword("")
+    setPasswordError(null)
+    setPasswordSuccess(null)
+  }
+
+  const validatePasswordForm = () => {
+    if (!currentPassword) {
+      setPasswordError("Current password is required")
+      return false
+    }
+    if (!newPassword) {
+      setPasswordError("New password is required")
+      return false
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters long")
+      return false
+    }
+    if (!confirmPassword) {
+      setPasswordError("Please confirm your new password")
+      return false
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match")
+      return false
+    }
+    if (currentPassword === newPassword) {
+      setPasswordError("New password must be different from current password")
+      return false
+    }
+    return true
+  }
+
+  const handlePasswordChangeSubmit = async () => {
+    if (!validatePasswordForm()) {
+      return
+    }
+
+    try {
+      setIsChangingPassword(true)
+      setPasswordError(null)
+      setPasswordSuccess(null)
+
+      const token = localStorage.getItem("token")
+      if (!token) {
+        setPasswordError("No authentication token found")
+        return
+      }
+
+      const response = await fetch("/api/user/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      })
+
+      const data: PasswordChangeResponse = await response.json()
+
+      if (response.ok && data.success === "true") {
+        setPasswordSuccess(data.message || "Password changed successfully")
+        setCurrentPassword("")
+        setNewPassword("")
+        setConfirmPassword("")
+        
+        // Close dialog after 2 seconds
+        setTimeout(() => {
+          setShowPasswordDialog(false)
+          setPasswordSuccess(null)
+        }, 2000)
+      } else {
+        setPasswordError(data.message || "Failed to change password")
+      }
+    } catch (error) {
+      console.error("Error changing password:", error)
+      setPasswordError("Failed to change password. Please try again.")
+    } finally {
+      setIsChangingPassword(false)
+    }
   }
 
   const getRoleBadge = (role: string) => {
@@ -370,18 +493,22 @@ function ProfileContent() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
+                {/* <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
                   <Edit className="h-4 w-4" />
                   Edit Profile Information
-                </Button>
-                <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
-                  <Shield className="h-4 w-4" />
+                </Button> */}
+                <Button 
+                  onClick={handlePasswordChangeClick}
+                  variant="outline" 
+                  className="w-full justify-start gap-2 bg-transparent hover:bg-orange-50 border-orange-200 text-orange-700"
+                >
+                  <Lock className="h-4 w-4" />
                   Change Password
                 </Button>
-                <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
+                {/* <Button variant="outline" className="w-full justify-start gap-2 bg-transparent">
                   <Settings className="h-4 w-4" />
                   Account Settings
-                </Button>
+                </Button> */}
                 {profile.role.toLowerCase() === "admin" && (
                   <Button
                     variant="outline"
@@ -427,6 +554,150 @@ function ProfileContent() {
           )}
         </div>
       </div>
+
+      {/* Password Change Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <Lock className="h-5 w-5" />
+              Change Password
+            </DialogTitle>
+            <DialogDescription>
+              Enter your current password and choose a new secure password.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Current Password */}
+            <div className="space-y-2">
+              <Label htmlFor="currentPassword">Current Password</Label>
+              <div className="relative">
+                <Input
+                  id="currentPassword"
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff className="h-4 w-4 text-slate-500" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-slate-500" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* New Password */}
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New Password</Label>
+              <div className="relative">
+                <Input
+                  id="newPassword"
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password (min 6 characters)"
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="h-4 w-4 text-slate-500" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-slate-500" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Confirm Password */}
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm New Password</Label>
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4 text-slate-500" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-slate-500" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {passwordError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                <p className="text-sm text-red-700">{passwordError}</p>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {passwordSuccess && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                <p className="text-sm text-green-700">{passwordSuccess}</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={handlePasswordChangeCancel}
+              variant="outline"
+              disabled={isChangingPassword}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePasswordChangeSubmit}
+              disabled={isChangingPassword}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {isChangingPassword ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Changing...
+                </>
+              ) : (
+                <>
+                  <Lock className="h-4 w-4 mr-2" />
+                  Change Password
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

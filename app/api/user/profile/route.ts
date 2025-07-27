@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     console.log("Fetching user profile from backend API...")
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/v1/users/profile`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/users/profile`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           success: "false",
-          message: "Cannot connect to backend server. Please ensure the backend is running on http://localhost:4000",
+          message: "Cannot connect to backend server. Please ensure the backend is running.",
         },
         { status: 503 },
       )
