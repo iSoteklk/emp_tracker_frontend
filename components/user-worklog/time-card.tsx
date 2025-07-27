@@ -360,6 +360,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
           address: locationData.address
         },
         workLocationId: selectedWorkLocation._id,
+        workLocationName: selectedWorkLocation.name,
         notes: clockInNotes
       }
 
@@ -491,6 +492,7 @@ export function GlassTimeCard(props: GlassTimeCardProps) {
           address: locationData.address
         },
         workLocationId: selectedWorkLocation._id,
+        workLocationName: selectedWorkLocation.name,
         notes: clockOutNotes
       }
 

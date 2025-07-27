@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { location, geofence, notes } = body
+    const { location, workLocationId, workLocationName, notes } = body
 
     // Get the authorization header
     const authHeader = request.headers.get("authorization")
@@ -18,6 +18,17 @@ export async function POST(request: NextRequest) {
         {
           success: "false",
           message: "Valid location data (latitude, longitude) is required",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Validate work location data
+    if (!workLocationId || !workLocationName) {
+      return NextResponse.json(
+        {
+          success: "false",
+          message: "Work location ID and name are required",
         },
         { status: 400 },
       )
@@ -40,13 +51,16 @@ export async function POST(request: NextRequest) {
         longitude: location.longitude,
         address: location.address || "Location not available",
         accuracy: location.accuracy || 10,
+        name: workLocationName, // Add work location name
       },
+      workLocationId: workLocationId, // Include work location ID
       notes: notes || "Clock out via web app",
     }
 
     console.log("Sending clock-out request with data:", clockOutData)
     console.log("Date being used:", clockOutData.date)
     console.log("Clock out time:", clockOutData.clockOutTime)
+    console.log("Work location:", { id: workLocationId, name: workLocationName })
 
     // Make the API call to the external clock-out endpoint
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/shift/clock-out`, {
@@ -70,6 +84,7 @@ export async function POST(request: NextRequest) {
           data: data,
           clockOutTime: clockOutData.clockOutTime,
           location: clockOutData.clockOutLocation,
+          workLocationId: workLocationId,
         },
         { status: 200 },
       )
