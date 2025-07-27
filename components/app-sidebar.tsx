@@ -32,6 +32,11 @@ const adminNavigationItems = [
     icon: UserPlus,
   },
   {
+    title: "All Users",
+    url: "/admin/all-users",
+    icon: Users,
+  },
+  {
     title: "Work Configuration",
     url: "/admin/work-config",
     icon: Settings,
