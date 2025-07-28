@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { format, isToday, isSameDay, parseISO } from "date-fns"
+import { format, isToday, isSameDay, parseISO, addDays, startOfDay, endOfDay } from "date-fns"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -47,6 +47,7 @@ function LeaveManagementContent() {
   const [filteredLeaveRequests, setFilteredLeaveRequests] = useState<LeaveRequest[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [viewMode, setViewMode] = useState<"7days" | "single">("7days") // Track current view mode
   const [calendarMonth, setCalendarMonth] = useState<number>(new Date().getMonth())
   const [calendarYear, setCalendarYear] = useState<number>(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
@@ -74,11 +75,15 @@ function LeaveManagementContent() {
   }, [router])
 
   useEffect(() => {
-    // Filter leaves based on selected date
+    // Filter leaves based on selected date and view mode
     if (allLeaveRequests.length > 0) {
-      filterLeavesByDate(selectedDate)
+      if (viewMode === "7days") {
+        filterLeavesByDateRange(selectedDate, 7)
+      } else {
+        filterLeavesByDate(selectedDate)
+      }
     }
-  }, [allLeaveRequests, selectedDate])
+  }, [allLeaveRequests, selectedDate, viewMode])
 
   const fetchEmployees = async () => {
     try {
@@ -135,11 +140,11 @@ function LeaveManagementContent() {
       }
 
       const data: ApiResponse = await response.json()
-      
+
       if (data.success) {
         setAllLeaveRequests(data.data)
-        // Initially filter for today's leaves
-        filterLeavesByDate(new Date(), data.data)
+        // Initially filter for upcoming 7 days from today
+        filterLeavesByDateRange(new Date(), 7, data.data)
       } else {
         setError("Failed to fetch leave data")
       }
@@ -160,26 +165,50 @@ function LeaveManagementContent() {
     setFilteredLeaveRequests(filtered)
   }
 
+  const filterLeavesByDateRange = (startDate: Date, days: number, leaves = allLeaveRequests) => {
+    const endDate = addDays(startDate, days - 1)
+    const filtered = leaves.filter((leave) => {
+      const leaveStart = parseISO(leave.startDate)
+      const leaveEnd = parseISO(leave.endDate)
+
+      // Check if leave overlaps with the date range
+      return leaveStart <= endOfDay(endDate) && leaveEnd >= startOfDay(startDate)
+    })
+
+    // Sort by start date
+    filtered.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+    setFilteredLeaveRequests(filtered)
+  }
+
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date)
+    setViewMode("single") // Switch to single day view when date is selected
     setIsCalendarModalOpen(false)
+  }
+
+  const handleRefresh = () => {
+    // Reset to upcoming 7 days view
+    const today = new Date()
+    setSelectedDate(today)
+    setViewMode("7days")
+    fetchLeaveData()
   }
 
   const generateCalendarDays = () => {
     const firstDay = new Date(calendarYear, calendarMonth, 1)
     const lastDay = new Date(calendarYear, calendarMonth + 1, 0)
-    
+
     const startDate = new Date(firstDay)
     startDate.setDate(startDate.getDate() - firstDay.getDay())
-    
+
     const days = []
     const current = new Date(startDate)
-    
+
     while (current <= lastDay || current.getDay() !== 0) {
       days.push(new Date(current))
       current.setDate(current.getDate() + 1)
     }
-    
+
     return days
   }
 
@@ -230,12 +259,37 @@ function LeaveManagementContent() {
 
   const getEmployeeDetails = (email: string) => {
     const employee = employees.find((emp) => emp.email === email)
-    return employee ? {
-      fullName: `${employee.fname || ""} ${employee.lname || ""}`.trim() || email,
-      contact: employee.contact || "N/A"
-    } : {
-      fullName: email,
-      contact: "N/A"
+    return employee
+      ? {
+          fullName: `${employee.fname || ""} ${employee.lname || ""}`.trim() || email,
+          contact: employee.contact || "N/A",
+        }
+      : {
+          fullName: email,
+          contact: "N/A",
+        }
+  }
+
+  const getDateRangeText = () => {
+    if (viewMode === "7days") {
+      const endDate = addDays(selectedDate, 6)
+      if (isToday(selectedDate)) {
+        return `Upcoming 7 Days (${format(selectedDate, "MMM dd")} - ${format(endDate, "MMM dd, yyyy")})`
+      }
+      return `${format(selectedDate, "MMM dd")} - ${format(endDate, "MMM dd, yyyy")}`
+    } else {
+      return isToday(selectedDate) ? "Today" : format(selectedDate, "MMM dd, yyyy")
+    }
+  }
+
+  const getViewModeDescription = () => {
+    if (viewMode === "7days") {
+      const endDate = addDays(selectedDate, 6)
+      return `Showing leaves from ${format(selectedDate, "MMM dd")} to ${format(endDate, "MMM dd, yyyy")}`
+    } else {
+      return isToday(selectedDate)
+        ? "All employees on leave today"
+        : `All employees on leave for ${format(selectedDate, "MMM dd, yyyy")}`
     }
   }
 
@@ -244,8 +298,20 @@ function LeaveManagementContent() {
   }
 
   const calendarDays = generateCalendarDays()
-  const monthNames = ["January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"]
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ]
 
   // Generate year options (current year ± 10 years)
   const currentYear = new Date().getFullYear()
@@ -264,27 +330,21 @@ function LeaveManagementContent() {
               <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-sky-600 bg-clip-text text-transparent">
                 Leave Management
               </h1>
-              <p className="text-sm text-slate-600">
-                Viewing leaves for {isToday(selectedDate) ? "Today" : format(selectedDate, "MMM dd, yyyy")}
-              </p>
+              <p className="text-sm text-slate-600">{getDateRangeText()}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              onClick={() => setIsCalendarModalOpen(true)}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
+            <Button onClick={() => setIsCalendarModalOpen(true)} variant="outline" className="flex items-center gap-2">
               <CalendarDays className="h-4 w-4" />
               Select Date
             </Button>
             <Button
-              onClick={fetchLeaveData}
+              onClick={handleRefresh}
               disabled={loading}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              Refresh
+              {viewMode === "single" ? "Show Upcoming 7 Days" : "Refresh"}
             </Button>
           </div>
         </div>
@@ -297,7 +357,11 @@ function LeaveManagementContent() {
                 <FileText className="h-8 w-8 text-blue-600" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-slate-600">
-                    {isToday(selectedDate) ? "Today's Requests" : "Selected Date Requests"}
+                    {viewMode === "7days"
+                      ? "Leave Requests (7 Days)"
+                      : isToday(selectedDate)
+                        ? "Today's Requests"
+                        : "Selected Date Requests"}
                   </p>
                   <p className="text-2xl font-bold text-slate-800">{filteredLeaveRequests.length}</p>
                 </div>
@@ -326,7 +390,7 @@ function LeaveManagementContent() {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-slate-600">Employees on Leave</p>
                   <p className="text-2xl font-bold text-slate-800">
-                    {new Set(filteredLeaveRequests.map(leave => leave.employee)).size}
+                    {new Set(filteredLeaveRequests.map((leave) => leave.employee)).size}
                   </p>
                 </div>
               </div>
@@ -337,14 +401,8 @@ function LeaveManagementContent() {
         {/* Leave Requests Table */}
         <Card className="bg-white/80 border-blue-100">
           <CardHeader>
-            <CardTitle className="text-blue-700">
-              Leave Requests - {isToday(selectedDate) ? "Today" : format(selectedDate, "MMM dd, yyyy")}
-            </CardTitle>
-            <CardDescription>
-              {isToday(selectedDate) 
-                ? "All employees on leave today" 
-                : `All employees on leave for ${format(selectedDate, "MMM dd, yyyy")}`}
-            </CardDescription>
+            <CardTitle className="text-blue-700">Leave Requests - {getDateRangeText()}</CardTitle>
+            <CardDescription>{getViewModeDescription()}</CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -355,14 +413,14 @@ function LeaveManagementContent() {
             ) : error ? (
               <div className="text-center py-8 text-red-600">
                 <p>{error}</p>
-                <Button onClick={fetchLeaveData} className="mt-4" variant="outline">
+                <Button onClick={fetchLeaveData} className="mt-4 bg-transparent" variant="outline">
                   Try Again
                 </Button>
               </div>
             ) : filteredLeaveRequests.length === 0 ? (
               <div className="text-center py-8 text-slate-600">
                 <FileText className="h-12 w-12 mx-auto mb-4 text-slate-400" />
-                <p>No leave requests found for {isToday(selectedDate) ? "today" : format(selectedDate, "MMM dd, yyyy")}</p>
+                <p>No leave requests found for {getDateRangeText()}</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -393,14 +451,9 @@ function LeaveManagementContent() {
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-slate-600">
-                            {employeeDetails.contact}
-                          </td>
+                          <td className="py-3 px-4 text-slate-600">{employeeDetails.contact}</td>
                           <td className="py-3 px-4">
-                            <Badge 
-                              variant="outline" 
-                              className={getLeaveTypeBadgeColor(leave.leaveType)}
-                            >
+                            <Badge variant="outline" className={getLeaveTypeBadgeColor(leave.leaveType)}>
                               {leave.leaveType.charAt(0).toUpperCase() + leave.leaveType.slice(1)}
                             </Badge>
                           </td>
@@ -426,9 +479,7 @@ function LeaveManagementContent() {
                               {leave.comments || "-"}
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-slate-500 text-sm">
-                            {formatDate(leave.createdAt)}
-                          </td>
+                          <td className="py-3 px-4 text-slate-500 text-sm">{formatDate(leave.createdAt)}</td>
                         </tr>
                       )
                     })}
@@ -443,28 +494,22 @@ function LeaveManagementContent() {
         <Dialog open={isCalendarModalOpen} onOpenChange={setIsCalendarModalOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-center">
-                Select Date
-              </DialogTitle>
+              <DialogTitle className="text-center">Select Date</DialogTitle>
             </DialogHeader>
-            
+
             {/* Month/Year Navigation */}
             <div className="flex items-center justify-between mb-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePreviousMonth}
-                className="p-2"
-              >
+              <Button variant="outline" size="sm" onClick={handlePreviousMonth} className="p-2 bg-transparent">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              
+
               <div className="flex items-center gap-2">
-                <Select value={calendarMonth.toString()} onValueChange={(value) => setCalendarMonth(parseInt(value))}>
+                <Select
+                  value={calendarMonth.toString()}
+                  onValueChange={(value) => setCalendarMonth(Number.parseInt(value))}
+                >
                   <SelectTrigger className="w-32">
-                    <SelectValue>
-                      {monthNames[calendarMonth]}
-                    </SelectValue>
+                    <SelectValue>{monthNames[calendarMonth]}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {monthNames.map((month, index) => (
@@ -474,12 +519,13 @@ function LeaveManagementContent() {
                     ))}
                   </SelectContent>
                 </Select>
-                
-                <Select value={calendarYear.toString()} onValueChange={(value) => setCalendarYear(parseInt(value))}>
+
+                <Select
+                  value={calendarYear.toString()}
+                  onValueChange={(value) => setCalendarYear(Number.parseInt(value))}
+                >
                   <SelectTrigger className="w-20">
-                    <SelectValue>
-                      {calendarYear}
-                    </SelectValue>
+                    <SelectValue>{calendarYear}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {yearOptions.map((year) => (
@@ -490,19 +536,14 @@ function LeaveManagementContent() {
                   </SelectContent>
                 </Select>
               </div>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNextMonth}
-                className="p-2"
-              >
+
+              <Button variant="outline" size="sm" onClick={handleNextMonth} className="p-2 bg-transparent">
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
 
             <div className="grid grid-cols-7 gap-1 text-center">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                 <div key={day} className="p-2 text-sm font-medium text-slate-600">
                   {day}
                 </div>
@@ -511,7 +552,7 @@ function LeaveManagementContent() {
                 const leaveCount = getDayLeaveCount(day)
                 const isCurrentMonth = day.getMonth() === calendarMonth
                 const isSelectedDay = isSameDay(day, selectedDate)
-                
+
                 return (
                   <button
                     key={index}
@@ -519,25 +560,34 @@ function LeaveManagementContent() {
                     disabled={!isCurrentMonth}
                     className={`
                       p-2 text-sm rounded-md transition-colors relative
-                      ${!isCurrentMonth 
-                        ? 'text-slate-300 cursor-not-allowed' 
-                        : 'text-slate-700 hover:bg-blue-100 cursor-pointer'
+                      ${
+                        !isCurrentMonth
+                          ? "text-slate-300 cursor-not-allowed"
+                          : "text-slate-700 hover:bg-blue-100 cursor-pointer"
                       }
-                      ${isSelectedDay ? 'bg-blue-600 text-white hover:bg-blue-700' : ''}
+                      ${isSelectedDay ? "bg-blue-600 text-white hover:bg-blue-700" : ""}
                     `}
                   >
                     {day.getDate()}
                     {leaveCount > 0 && isCurrentMonth && (
-                      <div className={`
+                      <div
+                        className={`
                         absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center
-                        ${isSelectedDay ? 'bg-white text-blue-600' : ''}
-                      `}>
+                        ${isSelectedDay ? "bg-white text-blue-600" : ""}
+                      `}
+                      >
                         {leaveCount}
                       </div>
                     )}
                   </button>
                 )
               })}
+            </div>
+
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-700 text-center">
+                <strong>Note:</strong> Selecting a date will show leaves only for that specific date
+              </p>
             </div>
           </DialogContent>
         </Dialog>
@@ -552,4 +602,4 @@ export default function LeaveManagementPage() {
       <LeaveManagementContent />
     </AuthGuard>
   )
-} 
+}
