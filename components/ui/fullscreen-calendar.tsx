@@ -112,50 +112,7 @@ export function FullScreenCalendar({ data, onDateClick }: FullScreenCalendarProp
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-4 md:flex-row md:gap-6">
-            <Button variant="outline" size="icon" className="hidden lg:flex bg-transparent">
-              <SearchIcon size={16} strokeWidth={2} aria-hidden="true" />
-            </Button>
-
-            <Separator orientation="vertical" className="hidden h-6 lg:block" />
-
-            <div className="inline-flex w-full -space-x-px rounded-lg shadow-sm shadow-black/5 md:w-auto rtl:space-x-reverse">
-              <Button
-                onClick={previousMonth}
-                className="rounded-none shadow-none first:rounded-s-lg last:rounded-e-lg focus-visible:z-10 bg-transparent"
-                variant="outline"
-                size="icon"
-                aria-label="Navigate to previous month"
-              >
-                <ChevronLeftIcon size={16} strokeWidth={2} aria-hidden="true" />
-              </Button>
-              <Button
-                onClick={goToToday}
-                className="w-full rounded-none shadow-none first:rounded-s-lg last:rounded-e-lg focus-visible:z-10 md:w-auto bg-transparent"
-                variant="outline"
-              >
-                Today
-              </Button>
-              <Button
-                onClick={nextMonth}
-                className="rounded-none shadow-none first:rounded-s-lg last:rounded-e-lg focus-visible:z-10 bg-transparent"
-                variant="outline"
-                size="icon"
-                aria-label="Navigate to next month"
-              >
-                <ChevronRightIcon size={16} strokeWidth={2} aria-hidden="true" />
-              </Button>
-            </div>
-
-            <Separator orientation="vertical" className="hidden h-6 md:block" />
-
-            <Separator orientation="horizontal" className="block w-full md:hidden" />
-
-            <Button className="w-full gap-2 md:w-auto">
-              <PlusCircleIcon size={16} strokeWidth={2} aria-hidden="true" />
-              <span>New Event</span>
-            </Button>
-          </div>
+          
         </div>
 
         {/* Calendar Grid */}

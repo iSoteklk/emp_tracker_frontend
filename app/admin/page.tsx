@@ -1,27 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { format } from "date-fns"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { AuthGuard } from "@/components/auth-guard"
 import { EmployeeTable } from "@/components/admin/employee-table"
 import { FullScreenCalendar } from "@/components/ui/fullscreen-calendar"
-import { LogOut, Users, Clock, Calendar, BarChart3, Plane } from "lucide-react"
+import { LogOut } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 function AdminDashboardContent() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
-  const [summaryStats, setSummaryStats] = useState({
-    totalEmployees: 0,
-    activeEmployees: 0,
-    leaveEmployees: 0,
-    lateEmployees: 0,
-    totalHoursToday: 0,
-  })
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const userData = localStorage.getItem("user")
@@ -35,94 +26,9 @@ function AdminDashboardContent() {
       }
     }
 
-    // Fetch initial data
-    fetchDashboardStats()
-
     // Dispatch auth change event to ensure sidebar updates
     window.dispatchEvent(new Event("auth-change"))
   }, [router])
-
-  const fetchDashboardStats = async () => {
-    try {
-      setLoading(true)
-      const token = localStorage.getItem("token")
-
-      if (!token) {
-        console.error("No authentication token found")
-        return
-      }
-
-      // Fetch total employees
-      const employeesResponse = await fetch("/api/user/getall", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      let totalEmployees = 0
-      if (employeesResponse.ok) {
-        const employeesData = await employeesResponse.json()
-        if (employeesData.success === "true" && employeesData.data) {
-          totalEmployees = employeesData.data.length
-        }
-      }
-
-      // Fetch today's attendance
-      const today = format(new Date(), "yyyy-MM-dd")
-      const attendanceResponse = await fetch(`/api/attendance/${today}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      let activeToday = 0
-      if (attendanceResponse.ok) {
-        const attendanceData = await attendanceResponse.json()
-        if (attendanceData.success === "true" && attendanceData.data) {
-          activeToday = attendanceData.data.filter(
-            (record: any) => record.status === "clocked-in" || record.status === "clocked-out",
-          ).length
-        }
-      }
-
-      // Fetch today's leave data
-      const leaveResponse = await fetch("/api/leave/all", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      let leaveToday = 0
-      if (leaveResponse.ok) {
-        const leaveData = await leaveResponse.json()
-        if (leaveData.success === "true" && leaveData.data) {
-          const todayDate = new Date(today)
-          leaveToday = leaveData.data.filter((leave: any) => {
-            const startDate = new Date(leave.startDate)
-            const endDate = new Date(leave.endDate)
-            return todayDate >= startDate && todayDate <= endDate
-          }).length
-        }
-      }
-
-      setSummaryStats((prev) => ({
-        ...prev,
-        totalEmployees,
-        activeEmployees: activeToday,
-        leaveEmployees: leaveToday,
-      }))
-    } catch (error) {
-      console.error("Error fetching dashboard stats:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleLogout = () => {
     localStorage.removeItem("token")
@@ -137,17 +43,7 @@ function AdminDashboardContent() {
     router.push("/login")
   }
 
-  const handleAttendanceUpdate = (totalEmployees: number, activeToday: number, leaveToday: number) => {
-    setSummaryStats((prev) => ({
-      ...prev,
-      totalEmployees,
-      activeEmployees: activeToday,
-      leaveEmployees: leaveToday,
-    }))
-  }
-
   const handleRefreshStats = () => {
-    fetchDashboardStats()
     console.log("Refreshing admin stats...")
   }
 
@@ -254,83 +150,12 @@ function AdminDashboardContent() {
             </div>
           </div>
 
-          {/* Summary Cards - Optimized for mobile */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-6 mb-4 md:mb-6">
-            <Card className="bg-white/90 border-blue-100 shadow-sm">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex flex-col items-center space-y-1 md:flex-row md:space-y-0 md:space-x-3">
-                  <Users className="h-5 w-5 md:h-8 md:w-8 text-blue-600" />
-                  <div className="text-center md:text-left">
-                    <p className="text-xs md:text-sm font-medium text-blue-600">Total</p>
-                    <p className="text-base md:text-2xl font-bold text-blue-800">
-                      {loading ? (
-                        <div className="animate-pulse bg-slate-200 h-6 w-8 rounded"></div>
-                      ) : (
-                        summaryStats.totalEmployees
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/90 border-green-100 shadow-sm">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex flex-col items-center space-y-1 md:flex-row md:space-y-0 md:space-x-3">
-                  <Clock className="h-5 w-5 md:h-8 md:w-8 text-green-600" />
-                  <div className="text-center md:text-left">
-                    <p className="text-xs md:text-sm font-medium text-green-600">Active</p>
-                    <p className="text-base md:text-2xl font-bold text-green-800">
-                      {loading ? (
-                        <div className="animate-pulse bg-slate-200 h-6 w-8 rounded"></div>
-                      ) : (
-                        summaryStats.activeEmployees
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/90 border-yellow-100 shadow-sm">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex flex-col items-center space-y-1 md:flex-row md:space-y-0 md:space-x-3">
-                  <Plane className="h-5 w-5 md:h-8 md:w-8 text-yellow-600" />
-                  <div className="text-center md:text-left">
-                    <p className="text-xs md:text-sm font-medium text-yellow-600">On Leave</p>
-                    <p className="text-base md:text-2xl font-bold text-yellow-800">
-                      {loading ? (
-                        <div className="animate-pulse bg-slate-200 h-6 w-8 rounded"></div>
-                      ) : (
-                        summaryStats.leaveEmployees
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/90 border-red-100 shadow-sm">
-              <CardContent className="p-3 md:p-4">
-                <div className="flex flex-col items-center space-y-1 md:flex-row md:space-y-0 md:space-x-3">
-                  <Calendar className="h-5 w-5 md:h-8 md:w-8 text-red-600" />
-                  <div className="text-center md:text-left">
-                    <p className="text-xs md:text-sm font-medium text-red-600">Late</p>
-                    <p className="text-base md:text-2xl font-bold text-red-800">{summaryStats.lateEmployees}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            
-          </div>
-
           {/* Employee Table Component - Mobile optimized */}
           <div className="mb-4 md:mb-6">
             <Card className="bg-white/90 border-blue-100 shadow-sm">
               <CardContent className="p-0 md:p-4">
                 <div className="w-full overflow-x-auto">
-                  <EmployeeTable onRefresh={handleRefreshStats} onAttendanceUpdate={handleAttendanceUpdate} />
+                  <EmployeeTable onRefresh={handleRefreshStats} />
                 </div>
               </CardContent>
             </Card>

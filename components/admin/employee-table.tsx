@@ -34,7 +34,7 @@ interface AttendanceRecord {
 interface LeaveRecord {
   _id: string
   employee: string
-  leaveType: string
+  leaveType: "annual" | "sick" | "personal" | "emergency"
   startDate: string
   endDate: string
   reason: string
@@ -93,7 +93,7 @@ export function EmployeeTable({ onRefresh, onAttendanceUpdate }: EmployeeTablePr
 
       const data = await response.json()
 
-      if (data.success === "true" && data.data) {
+      if (data.success && data.data) {
         setEmployees(data.data)
       }
     } catch (error) {
@@ -127,7 +127,7 @@ export function EmployeeTable({ onRefresh, onAttendanceUpdate }: EmployeeTablePr
 
       const data = await response.json()
 
-      if (data.success === "true" && data.data) {
+      if (data.success && data.data) {
         setAttendanceData(data.data)
       } else {
         setAttendanceData([])
@@ -164,12 +164,13 @@ export function EmployeeTable({ onRefresh, onAttendanceUpdate }: EmployeeTablePr
 
       const data = await response.json()
 
-      if (data.success === "true" && data.data) {
+      if (data.success && data.data) {
         // Filter leaves for the selected date
         const selectedDateObj = new Date(date)
         const todaysLeaves = data.data.filter((leave: LeaveRecord) => {
           const startDate = new Date(leave.startDate)
           const endDate = new Date(leave.endDate)
+          // Check if the selected date falls within the leave period
           return selectedDateObj >= startDate && selectedDateObj <= endDate
         })
         setLeaveData(todaysLeaves)
@@ -320,6 +321,7 @@ export function EmployeeTable({ onRefresh, onAttendanceUpdate }: EmployeeTablePr
   }
 
   const getLeaveStatus = (employee: Employee) => {
+    // Find leave record for this employee on the selected date
     const leave = leaveData.find((record) => record.employee === employee.email)
 
     if (!leave) {
@@ -356,7 +358,7 @@ export function EmployeeTable({ onRefresh, onAttendanceUpdate }: EmployeeTablePr
       ),
       details: (
         <div className="text-xs text-slate-500 mt-1">
-          {leave.totalDays} day{leave.totalDays > 1 ? 's' : ''}
+          {leave.totalDays} day{leave.totalDays > 1 ? 's' : ''} • {leave.reason.length > 20 ? leave.reason.substring(0, 20) + '...' : leave.reason}
         </div>
       ),
     }
