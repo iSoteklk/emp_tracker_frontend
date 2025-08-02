@@ -91,20 +91,20 @@ export function FullScreenCalendar({ data, onDateClick }: FullScreenCalendarProp
 
   return (
     <>
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
         {/* Calendar Header */}
-        <div className="flex flex-col space-y-4 p-4 md:flex-row md:items-center md:justify-between md:space-y-0 lg:flex-none">
+        <div className="flex flex-col space-y-4 p-6 md:flex-row md:items-center md:justify-between md:space-y-0 lg:flex-none bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg border-b">
           <div className="flex flex-auto">
             <div className="flex items-center gap-4">
-              <div className="hidden w-20 flex-col items-center justify-center rounded-lg border bg-muted p-0.5 md:flex">
-                <h1 className="p-1 text-xs uppercase text-muted-foreground">{format(today, "MMM")}</h1>
-                <div className="flex w-full items-center justify-center rounded-lg border bg-background p-0.5 text-lg font-bold">
-                  <span>{format(today, "d")}</span>
+              <div className="hidden w-20 flex-col items-center justify-center rounded-xl bg-white shadow-md border border-blue-100 p-2 md:flex">
+                <h1 className="text-xs uppercase text-blue-600 font-medium">{format(today, "MMM")}</h1>
+                <div className="flex w-full items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-lg font-bold shadow-sm">
+                  <span className="py-1">{format(today, "d")}</span>
                 </div>
               </div>
               <div className="flex flex-col">
-                <h2 className="text-lg font-semibold text-foreground">{format(firstDayCurrentMonth, "MMMM, yyyy")}</h2>
-                <p className="text-sm text-muted-foreground">
+                <h2 className="text-2xl font-bold text-blue-900">{format(firstDayCurrentMonth, "MMMM, yyyy")}</h2>
+                <p className="text-sm text-blue-600 font-medium">
                   {format(firstDayCurrentMonth, "MMM d, yyyy")} -{" "}
                   {format(endOfMonth(firstDayCurrentMonth), "MMM d, yyyy")}
                 </p>
@@ -112,183 +112,169 @@ export function FullScreenCalendar({ data, onDateClick }: FullScreenCalendarProp
             </div>
           </div>
 
-          
+          {/* Navigation Controls */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 bg-white rounded-lg shadow-sm border border-blue-100 p-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={previousMonth}
+                className="h-8 w-8 p-0 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+              >
+                <ChevronLeftIcon className="h-4 w-4" />
+                <span className="sr-only">Previous month</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={nextMonth}
+                className="h-8 w-8 p-0 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+              >
+                <ChevronRightIcon className="h-4 w-4" />
+                <span className="sr-only">Next month</span>
+              </Button>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToToday}
+              className="text-xs px-4 py-2 bg-white border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 font-medium shadow-sm transition-all"
+            >
+              Today
+            </Button>
+          </div>
         </div>
 
         {/* Calendar Grid */}
-        <div className="lg:flex lg:flex-auto lg:flex-col">
+        <div className="lg:flex lg:flex-auto lg:flex-col bg-gradient-to-b from-white to-gray-50/30 p-4">
           {/* Week Days Header */}
-          <div className="grid grid-cols-7 border text-center text-xs font-semibold leading-6 lg:flex-none">
-            <div className="border-r py-2.5">Sun</div>
-            <div className="border-r py-2.5">Mon</div>
-            <div className="border-r py-2.5">Tue</div>
-            <div className="border-r py-2.5">Wed</div>
-            <div className="border-r py-2.5">Thu</div>
-            <div className="border-r py-2.5">Fri</div>
-            <div className="py-2.5">Sat</div>
+          <div className="grid grid-cols-7 gap-1 mb-4 text-center text-sm font-semibold text-blue-700 lg:flex-none">
+            <div className="py-3 rounded-lg bg-blue-50/50 border border-blue-100">Sun</div>
+            <div className="py-3 rounded-lg bg-blue-50/50 border border-blue-100">Mon</div>
+            <div className="py-3 rounded-lg bg-blue-50/50 border border-blue-100">Tue</div>
+            <div className="py-3 rounded-lg bg-blue-50/50 border border-blue-100">Wed</div>
+            <div className="py-3 rounded-lg bg-blue-50/50 border border-blue-100">Thu</div>
+            <div className="py-3 rounded-lg bg-blue-50/50 border border-blue-100">Fri</div>
+            <div className="py-3 rounded-lg bg-blue-50/50 border border-blue-100">Sat</div>
           </div>
 
           {/* Calendar Days */}
-          <div className="flex text-xs leading-6 lg:flex-auto">
-            <div className="hidden w-full border-x lg:grid lg:grid-cols-7 lg:grid-rows-5">
-              {days.map((day, dayIdx) =>
-                !isDesktop ? (
-                  <button
-                    onClick={() => handleDayClick(day)}
-                    key={dayIdx}
-                    type="button"
-                    className={cn(
-                      isEqual(day, selectedDay) && "text-primary-foreground",
-                      !isEqual(day, selectedDay) &&
-                        !isToday(day) &&
-                        isSameMonth(day, firstDayCurrentMonth) &&
-                        "text-foreground",
-                      !isEqual(day, selectedDay) &&
-                        !isToday(day) &&
-                        !isSameMonth(day, firstDayCurrentMonth) &&
-                        "text-muted-foreground",
-                      (isEqual(day, selectedDay) || isToday(day)) && "font-semibold",
-                      "flex h-14 flex-col border-b border-r px-3 py-2 hover:bg-muted focus:z-10",
-                    )}
-                  >
-                    <time
-                      dateTime={format(day, "yyyy-MM-dd")}
-                      className={cn(
-                        "ml-auto flex size-6 items-center justify-center rounded-full",
-                        isEqual(day, selectedDay) && isToday(day) && "bg-primary text-primary-foreground",
-                        isEqual(day, selectedDay) && !isToday(day) && "bg-primary text-primary-foreground",
-                      )}
-                    >
-                      {format(day, "d")}
-                    </time>
-                    {data.filter((date) => isSameDay(date.day, day)).length > 0 && (
-                      <div>
-                        {data
-                          .filter((date) => isSameDay(date.day, day))
-                          .map((date) => (
-                            <div key={date.day.toString()} className="-mx-0.5 mt-auto flex flex-wrap-reverse">
-                              {date.events.map((event) => (
-                                <span
-                                  key={event.id}
-                                  className="mx-0.5 mt-1 h-1.5 w-1.5 rounded-full bg-muted-foreground"
-                                />
-                              ))}
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </button>
-                ) : (
+          <div className="flex-auto">
+            {/* Desktop Calendar */}
+            <div className="hidden lg:grid lg:grid-cols-7 lg:gap-1 lg:auto-rows-fr">
+              {days.map((day, dayIdx) => {
+                const hasEvents = data.filter((date) => isSameDay(date.day, day)).length > 0
+                const dayEvents = data.filter((event) => isSameDay(event.day, day))
+                
+                return (
                   <div
                     key={dayIdx}
                     onClick={() => handleDayClick(day)}
                     className={cn(
                       dayIdx === 0 && colStartClasses[getDay(day)],
-                      !isEqual(day, selectedDay) &&
-                        !isToday(day) &&
-                        !isSameMonth(day, firstDayCurrentMonth) &&
-                        "bg-accent/50 text-muted-foreground",
-                      "relative flex flex-col border-b border-r hover:bg-muted focus:z-10 cursor-pointer",
-                      !isEqual(day, selectedDay) && "hover:bg-accent/75",
+                      "group relative min-h-[120px] rounded-xl cursor-pointer transition-all duration-200 p-3",
+                      "bg-background hover:bg-accent/50 border shadow-sm hover:shadow-md",
+                      isToday(day) && "ring-2 ring-blue-500 bg-blue-50/50",
+                      isEqual(day, selectedDay) && "ring-2 ring-primary bg-primary/5",
+                      !isSameMonth(day, firstDayCurrentMonth) && "opacity-40",
+                      hasEvents && "border-blue-200 bg-gradient-to-br from-blue-50/30 to-transparent"
                     )}
                   >
-                    <header className="flex items-center justify-between p-2.5">
-                      <button
-                        type="button"
+                    {/* Date Number */}
+                    <div className="flex justify-between items-start mb-2">
+                      <span
                         className={cn(
-                          isEqual(day, selectedDay) && "text-primary-foreground",
-                          !isEqual(day, selectedDay) &&
-                            !isToday(day) &&
-                            isSameMonth(day, firstDayCurrentMonth) &&
-                            "text-foreground",
-                          !isEqual(day, selectedDay) &&
-                            !isToday(day) &&
-                            !isSameMonth(day, firstDayCurrentMonth) &&
-                            "text-muted-foreground",
-                          isEqual(day, selectedDay) && isToday(day) && "border-none bg-primary",
-                          isEqual(day, selectedDay) && !isToday(day) && "bg-foreground",
-                          (isEqual(day, selectedDay) || isToday(day)) && "font-semibold",
-                          "flex h-7 w-7 items-center justify-center rounded-full text-xs hover:border",
+                          "inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
+                          isToday(day) && "bg-blue-500 text-white shadow-md",
+                          isEqual(day, selectedDay) && !isToday(day) && "bg-primary text-primary-foreground",
+                          !isEqual(day, selectedDay) && !isToday(day) && isSameMonth(day, firstDayCurrentMonth) && "text-foreground group-hover:bg-accent",
+                          !isSameMonth(day, firstDayCurrentMonth) && "text-muted-foreground"
                         )}
                       >
-                        <time dateTime={format(day, "yyyy-MM-dd")}>{format(day, "d")}</time>
-                      </button>
-                    </header>
+                        {format(day, "d")}
+                      </span>
+                      
+                      {hasEvents && (
+                        <div className="flex items-center space-x-1">
+                          <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></div>
+                          <span className="text-xs text-muted-foreground font-medium">
+                            {dayEvents.reduce((total, day) => total + day.events.length, 0)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
 
-                    <div className="flex-1 p-2.5">
-                      {data
-                        .filter((event) => isSameDay(event.day, day))
-                        .map((day) => (
-                          <div key={day.day.toString()} className="space-y-1.5">
-                            {day.events.slice(0, 1).map((event) => (
-                              <div
-                                key={event.id}
-                                className="flex flex-col items-start gap-1 rounded-lg border bg-muted/50 p-2 text-xs leading-tight"
-                              >
-                                <p className="font-medium leading-none">{event.name}</p>
-                                <p className="leading-none text-muted-foreground">{event.time}</p>
-                              </div>
-                            ))}
-                            {day.events.length > 1 && (
-                              <div className="text-xs text-muted-foreground">+ {day.events.length - 1} more</div>
-                            )}
-                          </div>
-                        ))}
+                    {/* Events */}
+                    <div className="space-y-1">
+                      {dayEvents.map((dayData) => (
+                        <div key={dayData.day.toString()}>
+                          {dayData.events.slice(0, 2).map((event) => (
+                            <div
+                              key={event.id}
+                              className="group/event rounded-lg bg-gradient-to-r from-blue-100 to-blue-50 p-2 border border-blue-200/50 hover:border-blue-300 transition-colors"
+                            >
+                              <p className="text-xs font-medium text-blue-900 leading-tight truncate">
+                                {event.name}
+                              </p>
+                              <p className="text-xs text-blue-600 mt-0.5">{event.time}</p>
+                            </div>
+                          ))}
+                          {dayData.events.length > 2 && (
+                            <div className="text-xs text-muted-foreground font-medium bg-muted/50 rounded px-2 py-1 text-center">
+                              +{dayData.events.length - 2} more events
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ),
-              )}
+                )
+              })}
             </div>
 
-            <div className="isolate grid w-full grid-cols-7 grid-rows-5 border-x lg:hidden">
-              {days.map((day, dayIdx) => (
-                <button
-                  onClick={() => handleDayClick(day)}
-                  key={dayIdx}
-                  type="button"
-                  className={cn(
-                    isEqual(day, selectedDay) && "text-primary-foreground",
-                    !isEqual(day, selectedDay) &&
-                      !isToday(day) &&
-                      isSameMonth(day, firstDayCurrentMonth) &&
-                      "text-foreground",
-                    !isEqual(day, selectedDay) &&
-                      !isToday(day) &&
-                      !isSameMonth(day, firstDayCurrentMonth) &&
-                      "text-muted-foreground",
-                    (isEqual(day, selectedDay) || isToday(day)) && "font-semibold",
-                    "flex h-14 flex-col border-b border-r px-3 py-2 hover:bg-muted focus:z-10",
-                  )}
-                >
-                  <time
-                    dateTime={format(day, "yyyy-MM-dd")}
+            {/* Mobile Calendar */}
+            <div className="grid grid-cols-7 gap-1 lg:hidden">
+              {days.map((day, dayIdx) => {
+                const hasEvents = data.filter((date) => isSameDay(date.day, day)).length > 0
+                const eventCount = data.filter((date) => isSameDay(date.day, day)).reduce((total, date) => total + date.events.length, 0)
+                
+                return (
+                  <button
+                    onClick={() => handleDayClick(day)}
+                    key={dayIdx}
+                    type="button"
                     className={cn(
-                      "ml-auto flex size-6 items-center justify-center rounded-full",
-                      isEqual(day, selectedDay) && isToday(day) && "bg-primary text-primary-foreground",
-                      isEqual(day, selectedDay) && !isToday(day) && "bg-primary text-primary-foreground",
+                      "relative h-12 w-full rounded-lg transition-all duration-200 group",
+                      "bg-background hover:bg-accent border shadow-sm hover:shadow-md",
+                      isToday(day) && "ring-2 ring-blue-500 bg-blue-50",
+                      isEqual(day, selectedDay) && "ring-2 ring-primary bg-primary/5",
+                      !isSameMonth(day, firstDayCurrentMonth) && "opacity-40",
+                      hasEvents && "border-blue-200"
                     )}
                   >
-                    {format(day, "d")}
-                  </time>
+                    <span
+                      className={cn(
+                        "absolute top-1 left-1/2 transform -translate-x-1/2 text-xs font-medium",
+                        isToday(day) && "text-blue-600 font-bold",
+                        isEqual(day, selectedDay) && !isToday(day) && "text-primary",
+                        !isEqual(day, selectedDay) && !isToday(day) && isSameMonth(day, firstDayCurrentMonth) && "text-foreground",
+                        !isSameMonth(day, firstDayCurrentMonth) && "text-muted-foreground"
+                      )}
+                    >
+                      {format(day, "d")}
+                    </span>
 
-                  {data.filter((date) => isSameDay(date.day, day)).length > 0 && (
-                    <div>
-                      {data
-                        .filter((date) => isSameDay(date.day, day))
-                        .map((date) => (
-                          <div key={date.day.toString()} className="-mx-0.5 mt-auto flex flex-wrap-reverse">
-                            {date.events.map((event) => (
-                              <span
-                                key={event.id}
-                                className="mx-0.5 mt-1 h-1.5 w-1.5 rounded-full bg-muted-foreground"
-                              />
-                            ))}
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </button>
-              ))}
+                    {hasEvents && (
+                      <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 flex items-center space-x-1">
+                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
+                        {eventCount > 1 && (
+                          <span className="text-xs text-blue-600 font-medium">{eventCount}</span>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

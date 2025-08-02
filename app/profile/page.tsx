@@ -421,12 +421,12 @@ function ProfileContent() {
                     <span className="text-slate-800">{profile.lname}</span>
                   </div>
                 </div>
-                <div>
+                {/* <div>
                   <label className="text-sm font-medium text-slate-600">Employee ID</label>
                   <div className="mt-1 p-3 bg-slate-50 rounded-lg border">
                     <span className="text-slate-800 font-mono">{profile._id.slice(-8).toUpperCase()}</span>
                   </div>
-                </div>
+                </div> */}
               </CardContent>
             </Card>
 
@@ -509,7 +509,7 @@ function ProfileContent() {
                   <Settings className="h-4 w-4" />
                   Account Settings
                 </Button> */}
-                {profile.role.toLowerCase() === "admin" && (
+                {/* {profile.role.toLowerCase() === "admin" && (
                   <Button
                     variant="outline"
                     className="w-full justify-start gap-2 bg-transparent border-blue-200 text-blue-700 hover:bg-blue-50"
@@ -517,7 +517,7 @@ function ProfileContent() {
                     <Shield className="h-4 w-4" />
                     Admin Settings
                   </Button>
-                )}
+                )} */}
               </CardContent>
             </Card>
           </div>
